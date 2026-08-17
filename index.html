@@ -53,6 +53,9 @@
     word-break:break-all;-webkit-user-select:all;user-select:all;margin-bottom:12px}
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);
     font-size:15px;padding:14px}
+  .diag{margin-top:18px;display:flex;flex-direction:column;gap:8px;align-items:center}
+  .diag span{color:var(--dim);font-size:12px}
+  .diag button{font-size:13px;padding:11px}
   /* The card is the share loop. A download link is useless here — an in-app browser
      will block the save — but every phone screenshots, so the card is built to BE
      screenshotted: 4:5, big number, the trace, and where it came from. */
@@ -96,6 +99,15 @@
 
     <p class="cardhint">Screenshot this to share it 👇</p>
     <canvas id="card"></canvas>
+
+    <!-- Calibration is currently built from 14 Instagram-compressed hums by about five
+         different people. A live hum into a good phone mic in a quiet room is a
+         different population, and the honest way to fix "the score reads low" is to
+         measure his real attempts rather than nudge a constant until it feels right. -->
+    <div class="diag">
+      <span id="dcount">0 attempts this session</span>
+      <button id="dcopy" class="ghost">Copy my numbers for Harry</button>
+    </div>
   </div>
 
   <p class="foot">Nothing is uploaded. It all runs on your phone.</p>
@@ -177,26 +189,65 @@ function detect(buf, sr, floor){
   return { hz: sr/(best+shift), clarity: bestV, rms };
 }
 
+// The vertical scale, in cents from the middle of the view to the top.
+//
+// This number decides whether an honest hum LOOKS honest, and it was wrong. It was set
+// to 150 on the theory that a tight zoom is what makes wobble visible — but a real
+// pitch monitor plots two and a half OCTAVES down the screen, and the same hum drawn
+// against 300 cents instead of 3000 looks ten times worse than it is. A steady hum has
+// to read as a flat line, because that is what it is; the trace is evidence, and
+// evidence with the gain cranked up is not more informative, just less trustworthy.
+//
+// 350 cents each way is three semitones: wide enough that holding a note reads as
+// holding a note, tight enough that losing it is unmissable.
+const VIEW_CENTS = 350;
+
+const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+function noteOf(hz){
+  const midi = Math.round(69 + 12*Math.log2(hz/440));
+  return { name: NOTE_NAMES[(midi%12+12)%12] + (Math.floor(midi/12)-1),
+           hz: 440*Math.pow(2,(midi-69)/12) };
+}
+
 function draw(){
   const w=cv.clientWidth, h=cv.clientHeight;
   ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle='#182234'; ctx.lineWidth=1;
-  for(let i=1;i<4;i++){ const y=h*i/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
   const v = frames.filter(f=>f.hz);
-  if(v.length<2) return;
 
-  // centre the trace on the median note, ±150 cents — this is the zoom that makes
-  // a wobble visible. On a wide axis every hum looks flat and the meter is useless.
+  if(v.length<2){
+    ctx.strokeStyle='#182234'; ctx.lineWidth=1;
+    for(let i=1;i<4;i++){ const y=h*i/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+    return;
+  }
+
   const med = median(v.map(f=>f.hz));
-  const SPAN = 150;
-  const yOf = hz => h/2 - (1200*Math.log2(hz/med))/SPAN*(h/2);
+  const yOf = hz => h/2 - (1200*Math.log2(hz/med))/VIEW_CENTS*(h/2);
+
+  // Semitone gridlines with note names, the way a pitch monitor draws them. The lines
+  // are what turn "a squiggle" into "you are sitting on B2" — an absolute reference the
+  // eye can judge against, instead of a shape floating in space.
+  const centre = noteOf(med);
+  ctx.font = '10px -apple-system,system-ui,sans-serif';
+  ctx.textBaseline = 'middle';
+  for(let s=-3; s<=3; s++){
+    const hz = centre.hz*Math.pow(2, s/12);
+    const y = yOf(hz);
+    if(y<8 || y>h-8) continue;
+    const onNote = (s===0);
+    ctx.strokeStyle = onNote ? '#2c3a4e' : '#182234';
+    ctx.lineWidth = onNote ? 1.5 : 1;
+    ctx.beginPath(); ctx.moveTo(34,y); ctx.lineTo(w,y); ctx.stroke();
+    ctx.fillStyle = onNote ? '#8ea3bd' : '#3d4c60';
+    ctx.fillText(noteOf(hz).name, 4, y);
+  }
 
   ctx.lineWidth=3; ctx.lineJoin='round'; ctx.lineCap='round';
   ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--go');
   let pen=false;
   ctx.beginPath();
+  const GUT = 34;
   frames.forEach((f,i)=>{
-    const x = i/(Math.max(frames.length,1)-1)*w;
+    const x = GUT + i/(Math.max(frames.length,1)-1)*(w-GUT);
     if(!f.hz){ pen=false; return; }
     const y = Math.max(3, Math.min(h-3, yOf(f.hz)));
     if(!pen){ ctx.moveTo(x,y); pen=true; } else ctx.lineTo(x,y);
@@ -206,7 +257,7 @@ function draw(){
   // mark the cracks in red — the single most legible thing on screen
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bad');
   cracks().forEach(i=>{
-    const x=i/(Math.max(frames.length,1)-1)*w;
+    const x=GUT + i/(Math.max(frames.length,1)-1)*(w-GUT);
     ctx.beginPath(); ctx.arc(x,h/2,5,0,7); ctx.fill();
   });
 }
@@ -541,8 +592,33 @@ function stop(){
   document.getElementById('sy').textContent =
     say + (pctBeat ? '  ·  Better than ' + pctBeat + '% of hums measured.' : '');
   drawCard(s, bd, col, pctBeat);
+  logAttempt(s, bd);
   document.getElementById('res').classList.add('on');
 }
+
+// ── diagnostics ──────────────────────────────────────────────────────────────
+// Every attempt is kept, in this browser only, so the scoring can be calibrated on
+// real hums from a real phone instead of on a hunch about what "feels" too low.
+let attempts = [];
+function logAttempt(s, band){
+  attempts.push({ score:s.total, band, note:+s.note.toFixed(1), wobble:+s.wobble.toFixed(1),
+                  drift:+s.drift.toFixed(1), cracks:s.cracks, held:+s.held.toFixed(1),
+                  clarity:+s.purity.toFixed(2) });
+  try{ localStorage.setItem('humAttempts', JSON.stringify(attempts.slice(-40))); }catch(e){}
+  document.getElementById('dcount').textContent =
+    attempts.length + (attempts.length===1?' attempt':' attempts') + ' this session';
+}
+try{ attempts = JSON.parse(localStorage.getItem('humAttempts')||'[]'); }catch(e){ attempts=[]; }
+
+document.getElementById('dcopy').onclick = async () => {
+  const txt = 'HUM METER — ' + attempts.length + ' attempts\n'
+    + 'scales wobble ' + JSON.stringify(CAL.scales.wobble)
+    + ' drift ' + JSON.stringify(CAL.scales.drift) + '\n'
+    + attempts.map(a=>`score ${a.score} ${a.band} | note ${a.note}Hz | wobble ${a.wobble}c | drift ${a.drift}c | cracks ${a.cracks} | held ${a.held}s | clarity ${a.clarity}`).join('\n');
+  const b = document.getElementById('dcopy');
+  try{ await navigator.clipboard.writeText(txt); b.textContent='Copied — paste it to Harry'; }
+  catch(e){ b.textContent='Copy failed — screenshot this instead'; console.log(txt); }
+};
 
 // ── the share card ───────────────────────────────────────────────────────────
 function drawCard(s, bandName, colVar, pctBeat){
@@ -578,7 +654,7 @@ function drawCard(s, bandName, colVar, pctBeat){
 
   const v = frames.filter(f=>f.hz);
   if(v.length>1){
-    const med = median(v.map(f=>f.hz)), SPAN=150;
+    const med = median(v.map(f=>f.hz)), SPAN=VIEW_CENTS;
     g.strokeStyle=col; g.lineWidth=7; g.lineJoin='round'; g.lineCap='round';
     let pen=false; g.beginPath();
     frames.forEach((f,i)=>{
