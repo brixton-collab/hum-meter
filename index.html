@@ -101,7 +101,7 @@
       <tr><td>Your note</td><td id="m0">—</td></tr>
       <tr><td>Steadiness</td><td id="m1">—</td></tr>
       <tr><td>Tone purity</td><td id="m3">—</td></tr>
-      <tr><td>Cracks</td><td id="m4">—</td></tr>
+      <tr><td>Held</td><td id="m4">—</td></tr>
     </table>
 
     <p class="cardhint">Screenshot this to share it 👇</p>
@@ -271,6 +271,17 @@ function draw(){
   });
   ctx.stroke();
 
+  // Shade everything after the break. The score is now literally "how far did you get",
+  // so the picture should show the same thing: the bright stretch is what counted.
+  const brk0 = cracks()[0];
+  if(brk0 !== undefined){
+    const x = GUT + brk0/(Math.max(frames.length,1)-1)*(w-GUT);
+    ctx.fillStyle = 'rgba(11,15,20,.62)'; ctx.fillRect(x, 0, w-x, h);
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--bad');
+    ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]);
+  }
+
   // mark the cracks in red — the single most legible thing on screen
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bad');
   cracks().forEach(i=>{
@@ -410,39 +421,76 @@ function deHash(){
   }
 }
 
+// WOBBLE and DRIFT, measured over whatever slice of the hum it is handed.
+//
+// Pulled out of score() so the SAME definitions can be applied to the part of a hum
+// that was actually held, rather than to the whole recording. That is not a nicety:
+// measured across a swing break these came back at 296 cents, so the break was
+// wrecking the very numbers meant to describe the part that went well.
+function measure(fr){
+  const v = fr.filter(f=>f.hz);
+  if(v.length < 3) return null;
+  const hz = v.map(f=>f.hz), med = median(hz);
+  const cents = hz.map(f=>1200*Math.log2(f/med));
+
+  // The split matters: a hum that slides smoothly up a semitone is tensing up, a hum
+  // that shakes around one note is unsteady. Same SD, different thing to tell someone.
+  // So detrend first, then measure what is left.
+  //
+  // Both are measured exactly as the desktop scorer measures them, and that is not a
+  // detail — the scales are percentiles of hums the desktop measured. A different
+  // definition scored against that scale would quietly mis-grade everyone.
+  const TREND_MS = 400, k = Math.max(1, Math.round(TREND_MS/HOP/2));
+  const trend = cents.map((_,i)=>median(cents.slice(Math.max(0,i-k), i+k+1)));
+  return { note: med,
+           wobble: sd(cents.map((c,i)=>c-trend[i])),
+           drift: Math.abs(trend[trend.length-1] - trend[0]) };
+}
+
+// ── HOLD SCORING ─────────────────────────────────────────────────────────────
+//
+// The old rule was binary: any crack hard-capped the score at SHAKY-1. On a swing hum
+// that meant including the break flipped 99 to 25, and there was nothing in between.
+//
+// But the middle IS the product. "The finer you make your hum, the better you hit it"
+// only means something if 72 -> 78 -> 83 is expressible. A pass/fail grade tells a
+// golfer that they failed; it does not tell them they got further this time.
+//
+//     score = (steadiness 55 + drift 25 + 20) x fraction-held
+//
+// Read it as one sentence: how cleanly you held the note, times how far you got before
+// you lost it. Hold it all the way and nothing changes from before (x 1.0) — checked
+// against the measured population, where 13 of the 14 hold to the end and score exactly
+// what they scored yesterday. Lose it three quarters of the way through and 75 is the
+// ceiling, however perfect the first three quarters were.
+//
+// The break stops being a disqualification and becomes the measurement.
 function score(){
   const v=frames.filter(f=>f.hz);
   if(v.length<20) return null;
-
   const clar = v.reduce((s,f)=>s+f.clarity,0)/v.length;
-  const hz=v.map(f=>f.hz), med=median(hz);
-  const cents=hz.map(f=>1200*Math.log2(f/med));
 
-  // WOBBLE and DRIFT are measured exactly as the desktop scorer measures them, and
-  // that is not a detail — the scales below are percentiles of hums the desktop
-  // measured. A different estimator produces a different distribution, so scoring a
-  // raw SD against a detrended scale would quietly mis-grade everyone. Same definition
-  // or the calibration is a decoration.
-  //
-  // The split itself matters too: a hum that slides smoothly up a semitone is tensing
-  // up, a hum that shakes around one note is unsteady. Same SD, different note to give
-  // someone. So detrend first, then measure what's left.
-  const TREND_MS = 400, k = Math.max(1, Math.round(TREND_MS/HOP/2));
-  const trend = cents.map((_,i)=>median(cents.slice(Math.max(0,i-k), i+k+1)));
-  const wobble = sd(cents.map((c,i)=>c-trend[i]));
-  const drift = Math.abs(trend[trend.length-1] - trend[0]);
-  const nCracks = cracks().length;
-  const held = (frames.length*HOP)/1000;
+  const brk  = cracks()[0];          // the FIRST break is where the note was lost...
+  const lost = brk !== undefined;    // ...and everything after it is, by definition, not held
+  const heldEnd  = lost ? brk : frames.length;
+  const heldFrac = lost ? heldEnd/frames.length : 1;
 
-  let total = band(wobble, CAL.scales.wobble[0], CAL.scales.wobble[1], CAL.weights.wobble)
-            + band(drift,  CAL.scales.drift[0],  CAL.scales.drift[1],  CAL.weights.drift)
-            + (nCracks ? 0 : CAL.weights.cracks);
-  // Hard rule, same as the desktop scorer: a hum that broke is not a good hum, no
-  // matter how clean the rest of it was.
-  if(nCracks) total = Math.min(total, CAL.bands.SHAKY - 1);
+  // If the break came so early there is nothing left to describe, measure the whole
+  // recording instead. heldFrac already puts that score on the floor; this only keeps
+  // a two-frame slice from being asked for a standard deviation.
+  const heldFrames = frames.slice(0, heldEnd);
+  const m = measure(heldFrames.filter(f=>f.hz).length >= 10 ? heldFrames : frames);
+  if(!m) return null;
 
-  return { total: Math.round(total*10)/10, note: med, wobble, drift,
-           purity: clar, cracks: nCracks, held, rough: clar < CLARITY_GATE };
+  const quality = band(m.wobble, CAL.scales.wobble[0], CAL.scales.wobble[1], CAL.weights.wobble)
+                + band(m.drift,  CAL.scales.drift[0],  CAL.scales.drift[1],  CAL.weights.drift)
+                + CAL.weights.cracks;
+
+  return { total: Math.round(quality*heldFrac*10)/10, quality,
+           note: m.note, wobble: m.wobble, drift: m.drift, purity: clar,
+           cracks: cracks().length, heldFrac,
+           brokeAt: lost ? (heldEnd*HOP)/1000 : null,
+           held: (frames.length*HOP)/1000, rough: clar < CLARITY_GATE };
 }
 
 // "Better than X% of hums measured" — true because it is read off the measured
@@ -456,12 +504,23 @@ function beats(total){
   return below;
 }
 
+// There is no CRACKED band any more, on purpose. A break is now a NUMBER — it moves
+// the score in proportion to how far you got — so the band it lands in is the honest
+// answer, and the sentence underneath says where it went instead of just "broken".
 function verdict(s){
-  if(s.cracks) return ['CRACKED','var(--bad)','It broke. Watch the red marks — that’s where you lost it.'];
-  if(s.total>=CAL.bands.ELITE) return ['ELITE','var(--go)','Rock steady. Almost nobody holds it like that.'];
-  if(s.total>=CAL.bands.CLEAN) return ['CLEAN','var(--ok)','Solid. It holds together.'];
-  if(s.total>=CAL.bands.SHAKY) return ['SHAKY','var(--warn)','Audibly wobbles. The tone is wandering.'];
-  return ['NEEDS WORK','var(--bad)','It didn’t hold. Keep the note in one place.'];
+  const col = s.total>=CAL.bands.ELITE ? ['ELITE','var(--go)']
+            : s.total>=CAL.bands.CLEAN ? ['CLEAN','var(--ok)']
+            : s.total>=CAL.bands.SHAKY ? ['SHAKY','var(--warn)']
+            : ['NEEDS WORK','var(--bad)'];
+  const pct = Math.round(s.heldFrac*100);
+  const say = s.brokeAt != null
+      ? 'You held it ' + pct + '% of the way, then lost it at ' + s.brokeAt.toFixed(1)
+        + 's. The red mark is where.'
+    : s.total>=CAL.bands.ELITE ? 'Held it the whole way, rock steady. Almost nobody does that.'
+    : s.total>=CAL.bands.CLEAN ? 'Held it the whole way. Solid.'
+    : s.total>=CAL.bands.SHAKY ? 'Held it the whole way, but it audibly wobbles.'
+    : 'It never settled. Keep the note in one place.';
+  return [col[0], col[1], say];
 }
 
 const HOP = 40;                       // ms between pitch frames
@@ -569,9 +628,26 @@ async function start(){
       '<b style="color:var(--warn)">Mic didn’t start.</b> ' + msg;
     return;
   }
+  // WIND FILTER — the difference between working outdoors and hearing nothing.
+  //
+  // His range recording returned ZERO hums. An 85 Hz high-pass in front of the tracker
+  // recovered three instantly. Wind against a phone lying in the grass is almost all
+  // rumble below the lowest note anyone hums, and to an autocorrelator that rumble is
+  // a big, slow, extremely periodic signal — exactly what it is built to lock onto. So
+  // it locks onto the wind and reports no voice.
+  //
+  // Costs nothing indoors: a hum's fundamental sits at 100-250 Hz, well clear of the
+  // corner, and a voice this removes the bottom octave from is still perfectly periodic
+  // in its harmonics, which is what the period estimate is read from. The low-pass
+  // trims hiss and consonant spray above where a hum has any energy left.
+  //
+  // The level bar reads from after the filter too, which is the honest place for it:
+  // wind was pegging the meter on a page that could not hear the hum.
   const src = ac.createMediaStreamSource(stream);
+  const hp = ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 85;
+  const lp = ac.createBiquadFilter(); lp.type='lowpass';  lp.frequency.value = 1200;
   const an = ac.createAnalyser();
-  an.fftSize = 2048; src.connect(an);
+  an.fftSize = 2048; src.connect(hp); hp.connect(lp); lp.connect(an);
   const buf = new Float32Array(an.fftSize);
 
   frames=[]; running=true; heard=false; quietRun=0; t0=performance.now();
@@ -673,7 +749,9 @@ function stop(){
              : steadyPct>=40 ? 'Wavering' : 'All over it';
   document.getElementById('m1').textContent = word + '  ·  ' + steadyPct + '/100';
   document.getElementById('m3').textContent = (s.purity*100).toFixed(0)+'%';
-  document.getElementById('m4').textContent = s.cracks ? s.cracks+' break(s)' : 'none';
+  document.getElementById('m4').textContent = s.brokeAt != null
+    ? Math.round(s.heldFrac*100) + '% · lost it at ' + s.brokeAt.toFixed(1) + 's'
+    : 'all the way · ' + s.held.toFixed(1) + 's';
   const pctBeat = beats(s.total);
   document.getElementById('sy').textContent =
     say + (pctBeat ? '  ·  Better than ' + pctBeat + '% of hums measured.' : '');
@@ -689,6 +767,9 @@ let attempts = [];
 function logAttempt(s, band){
   attempts.push({ score:s.total, band, note:+s.note.toFixed(1), wobble:+s.wobble.toFixed(1),
                   drift:+s.drift.toFixed(1), cracks:s.cracks, held:+s.held.toFixed(1),
+                  heldPct:Math.round(s.heldFrac*100),
+                  brokeAt:(s.brokeAt!=null?+s.brokeAt.toFixed(2):null),
+                  quality:+s.quality.toFixed(1),
                   clarity:+s.purity.toFixed(2) });
   try{ localStorage.setItem('humAttempts', JSON.stringify(attempts.slice(-40))); }catch(e){}
   document.getElementById('dcount').textContent =
@@ -758,7 +839,8 @@ function drawCard(s, bandName, colVar, pctBeat){
 
   g.fillStyle='#8ea3bd'; g.font='500 34px -apple-system,Inter,system-ui,sans-serif';
   g.fillText(s.note.toFixed(0)+' Hz   ·   ±'+s.wobble.toFixed(0)+' cents   ·   '
-    + (s.cracks ? s.cracks+' break'+(s.cracks>1?'s':'') : 'no breaks'), W/2, py+ph+80);
+    + (s.brokeAt != null ? 'held ' + Math.round(s.heldFrac*100) + '%' : 'held all the way'),
+    W/2, py+ph+80);
 
   g.fillStyle='#f2f6fb'; g.font='700 40px -apple-system,Inter,system-ui,sans-serif';
   g.fillText('Score your hum → @brixton_pg', W/2, H-90);
