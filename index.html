@@ -148,6 +148,15 @@ const HUSH_MS = 900;                  // silence this long after a hum = you're 
 // fatal — two people humming identically would get different numbers, and the meter
 // would be grading their hardware. Pitch survives all of that, and "can you hold ONE
 // note" is the question the whole thing is actually about.
+// BANDS ARE BRIXTON'S, set 2026-08-18: 85+ elite, 70-85 clean, 60-70 shaky, under 60
+// needs work. They are deliberately NOT percentiles of this small sample any more — a
+// percentile band moves every time the population changes, so a golfer who hummed the
+// same both times could score the same and be told something different. A fixed
+// standard is what lets 80 -> 82 -> 83 mean actual improvement.
+//
+// The SCALES below stay measured. Fixed bands on measured scales: what "good" means is
+// his call, what the number IS remains evidence.
+//
 // RECALIBRATED 8/18, AFTER de-hashing. The scales moved (wobble p10/p90 11.97/26.04 ->
 // 8.24/19.55) because removing estimator hash removed ~4 cents of fake wobble from every
 // hum in the population. Scores had to be re-anchored or the meter would have called
@@ -156,7 +165,7 @@ const CAL = {
   "n": 14, "n_clean": 13,
   "weights": {"wobble": 55, "drift": 25, "cracks": 20},
   "scales":  { "wobble": [8.24, 19.55], "drift": [22.6, 84.57] },
-  "bands":   {"ELITE": 88.4, "CLEAN": 53.8, "SHAKY": 37.2},
+  "bands":   { "ELITE": 85, "CLEAN": 70, "SHAKY": 60 },
   "percentiles": {"5": 26.6, "10": 32.6, "25": 45, "50": 58.3, "75": 80.3, "90": 94.9, "95": 96.9}
 };
 
@@ -452,7 +461,7 @@ function verdict(s){
   if(s.total>=CAL.bands.ELITE) return ['ELITE','var(--go)','Rock steady. Almost nobody holds it like that.'];
   if(s.total>=CAL.bands.CLEAN) return ['CLEAN','var(--ok)','Solid. It holds together.'];
   if(s.total>=CAL.bands.SHAKY) return ['SHAKY','var(--warn)','Audibly wobbles. The tone is wandering.'];
-  return ['CRACKED','var(--bad)','It didn’t hold.'];
+  return ['NEEDS WORK','var(--bad)','It didn’t hold. Keep the note in one place.'];
 }
 
 const HOP = 40;                       // ms between pitch frames
