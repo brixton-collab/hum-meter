@@ -162,11 +162,22 @@ const HUSH_MS = 900;                  // silence this long after a hum = you're 
 // hum in the population. Scores had to be re-anchored or the meter would have called
 // half of everything ELITE. His own "great example" clip lands at 100 under this.
 const CAL = {
-  "n": 14, "n_clean": 13,
-  "weights": {"wobble": 55, "drift": 25, "cracks": 20},
-  "scales":  { "wobble": [8.24, 19.55], "drift": [22.6, 84.57] },
+  // REBUILT 2026-08-18 for the steadiness rewrite. The old weights/scales belonged to
+  // wobble+drift and are gone; nothing here is tuned by feel.
+  //
+  // The BANDS are Brixton's, unchanged, and they survived the rewrite untouched — his
+  // three Nail the Pitch reference recordings land 99.6 / 80.9 / 66.2 against them.
+  //
+  // The PERCENTILES are measured, not asserted: 28 real hums (21 population + his 3
+  // references + 4 swing hums) rescored under the new metric. They exist only so
+  // "better than X% of hums measured" is a true sentence. Recompute them with
+  // hum-steady.py whenever the population grows — never hand-edit.
+  //
+  // There is no scale left to calibrate. The score is a direct physical measurement —
+  // the % of the span you spent on your own line — not a percentile of a population,
+  // so "you held your line 88% of the time" means the same thing in week 1 and week 30.
   "bands":   { "ELITE": 85, "CLEAN": 70, "SHAKY": 60 },
-  "percentiles": {"5": 26.6, "10": 32.6, "25": 45, "50": 58.3, "75": 80.3, "90": 94.9, "95": 96.9}
+  "percentiles": {"5": 66.0, "10": 67.6, "25": 71.3, "50": 77.5, "75": 83.4, "90": 94.9, "95": 96.0}
 };
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -427,70 +438,92 @@ function deHash(){
 // that was actually held, rather than to the whole recording. That is not a nicety:
 // measured across a swing break these came back at 296 cents, so the break was
 // wrecking the very numbers meant to describe the part that went well.
-function measure(fr){
-  const v = fr.filter(f=>f.hz);
-  if(v.length < 3) return null;
-  const hz = v.map(f=>f.hz), med = median(hz);
-  const cents = hz.map(f=>1200*Math.log2(f/med));
+// ── STEADINESS ───────────────────────────────────────────────────────────────
+//
+// REWRITTEN 2026-08-18 after Brixton overruled the old scorer on four swing hums.
+// It graded them 13-38; he said "all those above should be over 75." He was right, and
+// the fix was in his own words about the reference recording he sent:
+//
+//     "a steady hum that should score in the high 90s WITH A STRAIGHT LINE"
+//
+// A straight line that TILTS is still a straight line. The old score charged `drift` =
+// |trend[LAST] - trend[FIRST]|, which compares two endpoints and never looks between
+// them, so a perfectly smooth ramp was punished exactly as hard as a violent shake. On a
+// swing hum the last frame IS impact, so drift was measuring the strike, not the hum.
+//
+// And his second point, which is the whole product:
+//
+//     "the tension point in their swing is where they hold their breath. The hum stops
+//      for a split second and then they almost grunt because they gasp that air out."
+//
+// So a hum fails in exactly two ways, and the score is both at once:
+//
+//     LINE   - while you were humming, how tightly you hugged your own smooth path
+//     ON-AIR - how much of the span you were humming at ALL
+//     SCORE  = % of frames that are BOTH voiced AND on the line
+//
+// Measuring against the SPAN (first voiced frame to last) rather than against voiced
+// frames catches a spike and a dropout with one idea and no extra constant. Validated
+// on his three Nail the Pitch recordings and four graded swing hums:
+//
+//     REF-1 "straight line"      line 99.6  air 100.0  ->  99.6   he said "high 90s"
+//     REF-2 "a bit less steady"  line 88.4  air  91.5  ->  80.9
+//     REF-3 "the hum is lost"    line 86.4  air  76.7  ->  66.2
+//     SWING 1-4                  air 100 throughout    ->  70.5-88.9   he said "over 75"
+//
+// TOL = 25 cents, set by those anchors: tighter drops the swings to 55-77 and breaks
+// "over 75"; looser stops separating REF-1 from REF-2.
+const TOL_CENTS = 25, TREND_MS = 200, HOLD_MIN_MS = 50, GASP_CENTS = 100, GASP_GAP_MS = 250;
 
-  // The split matters: a hum that slides smoothly up a semitone is tensing up, a hum
-  // that shakes around one note is unsteady. Same SD, different thing to tell someone.
-  // So detrend first, then measure what is left.
-  //
-  // Both are measured exactly as the desktop scorer measures them, and that is not a
-  // detail — the scales are percentiles of hums the desktop measured. A different
-  // definition scored against that scale would quietly mis-grade everyone.
-  const TREND_MS = 400, k = Math.max(1, Math.round(TREND_MS/HOP/2));
-  const trend = cents.map((_,i)=>median(cents.slice(Math.max(0,i-k), i+k+1)));
-  return { note: med,
-           wobble: sd(cents.map((c,i)=>c-trend[i])),
-           drift: Math.abs(trend[trend.length-1] - trend[0]) };
-}
-
-// ── HOLD SCORING ─────────────────────────────────────────────────────────────
-//
-// The old rule was binary: any crack hard-capped the score at SHAKY-1. On a swing hum
-// that meant including the break flipped 99 to 25, and there was nothing in between.
-//
-// But the middle IS the product. "The finer you make your hum, the better you hit it"
-// only means something if 72 -> 78 -> 83 is expressible. A pass/fail grade tells a
-// golfer that they failed; it does not tell them they got further this time.
-//
-//     score = (steadiness 55 + drift 25 + 20) x fraction-held
-//
-// Read it as one sentence: how cleanly you held the note, times how far you got before
-// you lost it. Hold it all the way and nothing changes from before (x 1.0) — checked
-// against the measured population, where 13 of the 14 hold to the end and score exactly
-// what they scored yesterday. Lose it three quarters of the way through and 75 is the
-// ceiling, however perfect the first three quarters were.
-//
-// The break stops being a disqualification and becomes the measurement.
 function score(){
-  const v=frames.filter(f=>f.hz);
-  if(v.length<20) return null;
-  const clar = v.reduce((s,f)=>s+f.clarity,0)/v.length;
+  const first = frames.findIndex(f=>f.hz), last = frames.length-1-[...frames].reverse().findIndex(f=>f.hz);
+  if(first < 0 || last-first < 20) return null;
+  const span = frames.slice(first, last+1);            // trim lead-in / tail silence
+  const voiced = span.map(f=>!!f.hz);
+  const vh = span.filter(f=>f.hz).map(f=>f.hz);
+  if(vh.length < 15) return null;
 
-  const brk  = cracks()[0];          // the FIRST break is where the note was lost...
-  const lost = brk !== undefined;    // ...and everything after it is, by definition, not held
-  const heldEnd  = lost ? brk : frames.length;
-  const heldFrac = lost ? heldEnd/frames.length : 1;
+  const note = median(vh);
+  const cents = vh.map(h=>1200*Math.log2(h/note));
+  const k = Math.max(1, Math.round(TREND_MS/HOP/2));
+  const path = cents.map((_,i)=>median(cents.slice(Math.max(0,i-k), i+k+1)));
+  const dev  = cents.map((c,i)=>Math.abs(c-path[i]));
 
-  // If the break came so early there is nothing left to describe, measure the whole
-  // recording instead. heldFrac already puts that score on the floor; this only keeps
-  // a two-frame slice from being asked for a standard deviation.
-  const heldFrames = frames.slice(0, heldEnd);
-  const m = measure(heldFrames.filter(f=>f.hz).length >= 10 ? heldFrames : frames);
-  if(!m) return null;
+  // dev laid back onto the full span, so a dropout and a spike are the same axis
+  const devSpan = new Array(span.length).fill(null);
+  let vi=0; for(let i=0;i<span.length;i++) if(voiced[i]) devSpan[i]=dev[vi++];
 
-  const quality = band(m.wobble, CAL.scales.wobble[0], CAL.scales.wobble[1], CAL.weights.wobble)
-                + band(m.drift,  CAL.scales.drift[0],  CAL.scales.drift[1],  CAL.weights.drift)
-                + CAL.weights.cracks;
+  const onLine = devSpan.map(d=>d!==null && d<=TOL_CENTS);
+  const total  = onLine.filter(Boolean).length / span.length * 100;
+  const line   = dev.filter(d=>d<=TOL_CENTS).length / dev.length * 100;
+  const onAir  = voiced.filter(Boolean).length / span.length * 100;
 
-  return { total: Math.round(quality*heldFrac*10)/10, quality,
-           note: m.note, wobble: m.wobble, drift: m.drift, purity: clar,
-           cracks: cracks().length, heldFrac,
-           brokeAt: lost ? (heldEnd*HOP)/1000 : null,
-           held: (frames.length*HOP)/1000, rough: clar < CLARITY_GATE };
+  // TENSION EVENTS: breath hold -> gasp. This is the coaching output, not a stat.
+  const minHold = Math.max(1, Math.round(HOLD_MIN_MS/HOP));
+  const gapMax  = Math.round(GASP_GAP_MS/HOP);
+  const holds=[]; for(let i=0;i<span.length;){
+    if(!voiced[i]){ let j=i; while(j<span.length && !voiced[j]) j++;
+      if(j-i>=minHold) holds.push([i,j]); i=j; } else i++; }
+  const gasps=[]; for(let i=0;i<span.length;){
+    if(devSpan[i]!==null && devSpan[i]>GASP_CENTS){ let j=i, mx=0;
+      while(j<span.length && devSpan[j]!==null && devSpan[j]>GASP_CENTS){ mx=Math.max(mx,devSpan[j]); j++; }
+      gasps.push([i,j,mx]); i=j; } else i++; }
+  const tension=[];
+  for(const [h0,h1] of holds) for(const [g0,,mx] of gasps)
+    if(g0>=h1 && g0-h1<=gapMax){ tension.push({at:(h0*HOP)/1000, holdMs:Math.round((h1-h0)*HOP), gasp:Math.round(mx)}); break; }
+
+  // Least-squares slope over the whole path, NOT path[last]-path[0]. The endpoint
+  // difference is precisely what made the old `drift` untrustworthy: it reads two frames
+  // and ignores everything between them, so one noisy end frame invents a tilt that is
+  // not there. (Measured: it claimed -188c on a reference hum that is level to -5c.)
+  const n = path.length, xm = (n-1)/2, ym = path.reduce((a,b)=>a+b,0)/n;
+  let num=0, den=0;
+  for(let i=0;i<n;i++){ num += (i-xm)*(path[i]-ym); den += (i-xm)*(i-xm); }
+  const tilt = den ? (num/den)*(n-1) : 0;
+  const clar = span.filter(f=>f.hz).reduce((s,f)=>s+f.clarity,0)/vh.length;
+  return { total: Math.round(total*10)/10, line, onAir, tension, tilt, note,
+           jitter: median(dev)*1.4826, held:(vh.length*HOP)/1000,
+           span:(span.length*HOP)/1000, purity: clar, rough: clar < CLARITY_GATE };
 }
 
 // "Better than X% of hums measured" — true because it is read off the measured
@@ -512,14 +545,29 @@ function verdict(s){
             : s.total>=CAL.bands.CLEAN ? ['CLEAN','var(--ok)']
             : s.total>=CAL.bands.SHAKY ? ['SHAKY','var(--warn)']
             : ['NEEDS WORK','var(--bad)'];
-  const pct = Math.round(s.heldFrac*100);
-  const say = s.brokeAt != null
-      ? 'You held it ' + pct + '% of the way, then lost it at ' + s.brokeAt.toFixed(1)
-        + 's. The red mark is where.'
-    : s.total>=CAL.bands.ELITE ? 'Held it the whole way, rock steady. Almost nobody does that.'
-    : s.total>=CAL.bands.CLEAN ? 'Held it the whole way. Solid.'
-    : s.total>=CAL.bands.SHAKY ? 'Held it the whole way, but it audibly wobbles.'
-    : 'It never settled. Keep the note in one place.';
+  // A tension event is the thing worth saying out loud: it names WHERE in the swing the
+  // golfer held their breath, which is the one piece of coaching the number cannot give.
+  let say;
+  if(s.tension.length){
+    const t = s.tension[0];
+    say = s.tension.length === 1
+      ? 'You held your breath at ' + t.at.toFixed(1) + 's, then gasped the note back. '
+        + 'That is where your tension is.'
+      : 'The hum stopped ' + s.tension.length + ' times — first at ' + t.at.toFixed(1)
+        + 's. Each stop is a place you are holding tension.';
+  } else if(s.onAir < 95){
+    say = 'The hum dropped out for ' + Math.round(100-s.onAir) + '% of the way. '
+        + 'Keep the sound going the whole time.';
+  } else {
+    say = s.total>=CAL.bands.ELITE ? 'One clean line the whole way. Almost nobody does that.'
+        : s.total>=CAL.bands.CLEAN ? 'One line the whole way. Solid.'
+        : s.total>=CAL.bands.SHAKY ? 'It stayed on, but the line audibly wavers.'
+        : 'It never settled into a line. Keep the sound in one place.';
+  }
+  // Reported, never scored: a straight line that tilts is still a straight line.
+  if(Math.abs(s.tilt) > 80)
+    say += ' Your note ' + (s.tilt>0?'rose ':'fell ') + Math.abs(Math.round(s.tilt))
+         + ' cents as you went — smooth, but it travelled.';
   return [col[0], col[1], say];
 }
 
@@ -742,16 +790,13 @@ function stop(){
   // which is whether the note was held.
   document.getElementById('m0').textContent =
     noteOf(s.note).name + '  ·  ' + s.note.toFixed(0) + ' Hz';
-  const steadyPts = band(s.wobble, CAL.scales.wobble[0], CAL.scales.wobble[1], CAL.weights.wobble)
-                  + band(s.drift,  CAL.scales.drift[0],  CAL.scales.drift[1],  CAL.weights.drift);
-  const steadyPct = Math.round(steadyPts / (CAL.weights.wobble + CAL.weights.drift) * 100);
-  const word = steadyPct>=85 ? 'Rock steady' : steadyPct>=65 ? 'Steady'
-             : steadyPct>=40 ? 'Wavering' : 'All over it';
-  document.getElementById('m1').textContent = word + '  ·  ' + steadyPct + '/100';
+  const word = s.line>=95 ? 'Rock steady' : s.line>=85 ? 'Steady'
+             : s.line>=70 ? 'Wavering' : 'All over it';
+  document.getElementById('m1').textContent = word + '  ·  ' + Math.round(s.line) + '/100';
   document.getElementById('m3').textContent = (s.purity*100).toFixed(0)+'%';
-  document.getElementById('m4').textContent = s.brokeAt != null
-    ? Math.round(s.heldFrac*100) + '% · lost it at ' + s.brokeAt.toFixed(1) + 's'
-    : 'all the way · ' + s.held.toFixed(1) + 's';
+  document.getElementById('m4').textContent = s.tension.length
+    ? s.tension.length + ' stop' + (s.tension.length>1?'s':'') + ' · first at ' + s.tension[0].at.toFixed(1) + 's'
+    : Math.round(s.onAir) + '% on · ' + s.held.toFixed(1) + 's';
   const pctBeat = beats(s.total);
   document.getElementById('sy').textContent =
     say + (pctBeat ? '  ·  Better than ' + pctBeat + '% of hums measured.' : '');
@@ -765,11 +810,12 @@ function stop(){
 // real hums from a real phone instead of on a hunch about what "feels" too low.
 let attempts = [];
 function logAttempt(s, band){
-  attempts.push({ score:s.total, band, note:+s.note.toFixed(1), wobble:+s.wobble.toFixed(1),
-                  drift:+s.drift.toFixed(1), cracks:s.cracks, held:+s.held.toFixed(1),
-                  heldPct:Math.round(s.heldFrac*100),
-                  brokeAt:(s.brokeAt!=null?+s.brokeAt.toFixed(2):null),
-                  quality:+s.quality.toFixed(1),
+  attempts.push({ score:s.total, band, note:+s.note.toFixed(1),
+                  line:+s.line.toFixed(1), onAir:+s.onAir.toFixed(1),
+                  jitter:+s.jitter.toFixed(1), tilt:Math.round(s.tilt),
+                  tension:s.tension.length,
+                  tensionAt:s.tension.map(t=>+t.at.toFixed(2)),
+                  held:+s.held.toFixed(1), span:+s.span.toFixed(1),
                   clarity:+s.purity.toFixed(2) });
   try{ localStorage.setItem('humAttempts', JSON.stringify(attempts.slice(-40))); }catch(e){}
   document.getElementById('dcount').textContent =
@@ -778,10 +824,9 @@ function logAttempt(s, band){
 try{ attempts = JSON.parse(localStorage.getItem('humAttempts')||'[]'); }catch(e){ attempts=[]; }
 
 document.getElementById('dcopy').onclick = async () => {
-  const txt = 'HUM METER — ' + attempts.length + ' attempts\n'
-    + 'scales wobble ' + JSON.stringify(CAL.scales.wobble)
-    + ' drift ' + JSON.stringify(CAL.scales.drift) + '\n'
-    + attempts.map(a=>`score ${a.score} ${a.band} | note ${a.note}Hz | wobble ${a.wobble}c | drift ${a.drift}c | cracks ${a.cracks} | held ${a.held}s | clarity ${a.clarity}`).join('\n');
+  const txt = 'HUM METER — ' + attempts.length + ' attempts (steadiness = % of span on your own line, tol '
+    + TOL_CENTS + 'c)\n'
+    + attempts.map(a=>`score ${a.score} ${a.band} | note ${a.note}Hz | line ${a.line} | onAir ${a.onAir} | jitter ${a.jitter}c | tilt ${a.tilt}c | tension ${a.tension} @${JSON.stringify(a.tensionAt)} | span ${a.span}s | clarity ${a.clarity}`).join('\n');
   const b = document.getElementById('dcopy');
   try{ await navigator.clipboard.writeText(txt); b.textContent='Copied — paste it to Harry'; }
   catch(e){ b.textContent='Copy failed — screenshot this instead'; console.log(txt); }
@@ -838,8 +883,9 @@ function drawCard(s, bandName, colVar, pctBeat){
   }
 
   g.fillStyle='#8ea3bd'; g.font='500 34px -apple-system,Inter,system-ui,sans-serif';
-  g.fillText(s.note.toFixed(0)+' Hz   ·   ±'+s.wobble.toFixed(0)+' cents   ·   '
-    + (s.brokeAt != null ? 'held ' + Math.round(s.heldFrac*100) + '%' : 'held all the way'),
+  g.fillText(s.note.toFixed(0)+' Hz   ·   ±'+s.jitter.toFixed(0)+' cents   ·   '
+    + (s.tension.length ? s.tension.length + ' stop' + (s.tension.length>1?'s':'')
+                        : Math.round(s.onAir) + '% on the note'),
     W/2, py+ph+80);
 
   g.fillStyle='#f2f6fb'; g.font='700 40px -apple-system,Inter,system-ui,sans-serif';
