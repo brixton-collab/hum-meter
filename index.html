@@ -57,6 +57,9 @@
   .lvl i{display:block;height:100%;width:0%;background:var(--go);
     border-radius:3px;transition:width .06s linear}
   .lvl i.hot{background:var(--warn)}
+  .how{margin:14px 0 12px;padding:0 0 0 20px;color:var(--dim);font-size:14.5px;line-height:1.55}
+  .how li{margin:7px 0}
+  .how b{color:var(--ink)}
   .diag{margin-top:18px;display:flex;flex-direction:column;gap:8px;align-items:center}
   .diag span{color:var(--dim);font-size:12px}
   .diag button{font-size:13px;padding:11px}
@@ -68,7 +71,22 @@
 
 <div class="wrap">
   <h1>The Hum Meter</h1>
-  <p class="sub">Tap once and hum one note. It scores itself when you stop. Flat line = steady. Wavy = not. A break means it cracked.</p>
+  <p class="sub">How steady is your hum through a golf swing? Hum one note and find out.</p>
+
+  <!-- The three steps, before anything else on the page.
+       Someone arriving from Instagram has no idea this is meant to be used with a club
+       in their hands and the phone on the ground - and if they hum into it sitting on a
+       sofa, the number is real but the point is lost. Two sentences fix that, and they
+       have to come BEFORE the button, not after. -->
+  <ol class="how">
+    <li><b>Put your phone on the ground</b> next to your ball, screen up.</li>
+    <li><b>Tap start, then hum one note</b> — all the way through your backswing,
+        the ball, and your finish. Don’t stop when you hit it.</li>
+    <li><b>Pick it up and look.</b> It stops on its own when you go quiet.</li>
+  </ol>
+  <p class="hint" style="margin:-4px 0 14px">
+    No club handy? Just hum one steady note for a few seconds — it still scores it.
+  </p>
 
   <div class="stage">
     <canvas id="cv"></canvas>
@@ -123,9 +141,13 @@
          different people. A live hum into a good phone mic in a quiet room is a
          different population, and the honest way to fix "the score reads low" is to
          measure his real attempts rather than nudge a constant until it feels right. -->
-    <div class="diag">
+    <!-- Calibration diagnostics. These were for one person and read like nonsense to a
+         stranger ("Copy my numbers for Harry"), so they are hidden unless the URL says
+         ?debug=1. The scores are logged server-side now anyway, which is what the button
+         was really for. -->
+    <div class="diag" id="diag" style="display:none">
       <span id="dcount">0 attempts this session</span>
-      <button id="dcopy" class="ghost">Copy my numbers for Harry</button>
+      <button id="dcopy" class="ghost">Copy the raw numbers</button>
     </div>
   </div>
 
@@ -1136,6 +1158,9 @@ function logAttempt(s, band){
     attempts.length + (attempts.length===1?' attempt':' attempts') + ' this session';
 }
 try{ attempts = JSON.parse(localStorage.getItem('humAttempts')||'[]'); }catch(e){ attempts=[]; }
+
+if(new URLSearchParams(location.search).has('debug'))
+  document.getElementById('diag').style.display = '';
 
 document.getElementById('dcopy').onclick = async () => {
   const txt = 'HUM METER — ' + attempts.length + ' attempts (steadiness = % of span on your own line, tol '
