@@ -650,8 +650,15 @@ function score(){
       i=j;
     } else i++;
   }
+  // THE CRACK RULE, and the fix to it.
+  // Brixton: "if the hum cracks, the score has to be definitely below 75."
+  // A flat ceiling did that — and piled every cracked hum onto exactly 74.9, so a badly
+  // lost hum and a mildly cracked one read the same number. Useless to a golfer trying to
+  // improve. So the ceiling COMPRESSES instead of clipping: a cracked hum is scaled into
+  // 0..74.9 by how good it otherwise was. Ordering is preserved, the rule is honoured,
+  // and the range below 75 is actually used.
   const capped = cracks.length > 0 && total > CRACK_CAP;
-  const finalTotal = cracks.length ? Math.min(total, CRACK_CAP) : total;
+  const finalTotal = cracks.length ? total * (CRACK_CAP/100) : total;
 
   const tilt = den ? (num/den)*(n-1) : 0;
   const clar = span.filter(f=>f.hz).reduce((s,f)=>s+f.clarity,0)/vh.length;

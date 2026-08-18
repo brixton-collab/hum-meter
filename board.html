@@ -1,0 +1,644 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hum Board</title>
+<style>
+:root{
+  --bg:#0b0f14; --card:#141a23; --line:#1e2733; --ink:#eef3f9; --dim:#8ea3bd;
+  --go:#3ef2a0; --ok:#7fd4ff; --warn:#ffc857; --bad:#ff6b6b; --accent:#3ef2a0;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;
+  padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 76px)}
+.wrap{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:19px;margin:0;letter-spacing:-.01em}
+.sub{color:var(--dim);font-size:13px;margin-top:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.btn{display:block;width:100%;padding:16px;border-radius:12px;background:var(--accent);
+  color:#06251a;font-weight:700;font-size:17px;text-align:center}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);font-weight:600}
+.btn.rec{background:var(--bad);color:#fff}
+canvas{width:100%;height:300px;display:block;border-radius:10px;background:#0d1420}
+.score{font-size:64px;font-weight:800;line-height:1;letter-spacing:-.03em}
+.band{font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;margin-top:4px}
+.say{color:var(--dim);font-size:14px;margin-top:10px}
+.rowm{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.m{background:#0f1620;border:1px solid var(--line);border-radius:10px;padding:10px}
+.m b{display:block;font-size:10px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;font-weight:700}
+.m span{font-size:15px;font-weight:600}
+nav{position:fixed;bottom:0;left:0;right:0;background:#0d131b;border-top:1px solid var(--line);
+  display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:20}
+nav button{flex:1;padding:14px 4px;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--dim)}
+nav button.on{color:var(--accent)}
+.view{display:none}.view.on{display:block}
+.hint{color:var(--dim);font-size:13px}
+.warnbox{background:#3a2a12;border:1px solid #6b4d18;color:#ffd98a;border-radius:12px;padding:14px;margin:12px 0}
+.warnbox b{display:block;margin-bottom:4px;color:#ffc857}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:10px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;
+   padding:6px 4px;border-bottom:1px solid var(--line);font-weight:700}
+td{padding:9px 4px;border-bottom:1px solid #161d27}
+tr.me td{background:#10241d}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700}
+.strike{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.strike button{flex:1;min-width:36px;padding:12px 0;border-radius:9px;background:#0f1620;
+  border:1px solid var(--line);font-weight:700;font-size:15px}
+.strike button.sel{background:var(--accent);color:#06251a;border-color:var(--accent)}
+input{width:100%;padding:12px;border-radius:10px;background:#0f1620;border:1px solid var(--line);
+  color:var(--ink);font:inherit}
+.spark{width:100%;height:80px;display:block}
+.big{font-size:30px;font-weight:800;letter-spacing:-.02em}
+code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
+</style></head><body>
+
+<div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div><h1>Hum Board</h1><div class="sub" id="who">—</div></div>
+    <button class="btn ghost" style="width:auto;padding:8px 12px;font-size:13px" id="editname">Name</button>
+  </div>
+
+  <!-- ── HUM ───────────────────────────────────────────────────────────── -->
+  <section class="view on" id="v-hum">
+    <div id="blocker"></div>
+    <div class="card">
+      <canvas id="cv"></canvas>
+      <div id="live" class="hint" style="margin-top:10px">Hum one note, right through the ball.</div>
+    </div>
+    <button class="btn" id="go">Tap to start humming</button>
+    <div class="hint" style="margin-top:10px;text-align:center">
+      Hum through the backswing, the strike, and the follow-through.
+    </div>
+
+    <div class="card" id="res" style="display:none">
+      <div class="score" id="sc">—</div>
+      <div class="band" id="bd"></div>
+      <div class="say" id="sy"></div>
+      <div class="rowm">
+        <div class="m"><b>Your note</b><span id="m0">—</span></div>
+        <div class="m"><b>Steadiness</b><span id="m1">—</span></div>
+        <div class="m"><b>Through the ball</b><span id="m2">—</span></div>
+        <div class="m"><b>Cracks</b><span id="m3">—</span></div>
+      </div>
+      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+        <b style="font-size:13px">How was that strike?</b>
+        <div class="hint" style="margin-top:2px">0 = topped it · 10 = flushed it</div>
+        <div class="strike" id="strike"></div>
+        <div class="hint" id="strikeDone" style="margin-top:8px;display:none"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── MY BOARD ──────────────────────────────────────────────────────── -->
+  <section class="view" id="v-me">
+    <div class="card">
+      <div class="rowm" style="margin-top:0">
+        <div class="m"><b>Your best</b><span class="big" id="myBest">—</span></div>
+        <div class="m"><b>Your average</b><span class="big" id="myAvg">—</span></div>
+      </div>
+      <div class="rowm">
+        <div class="m"><b>Hums</b><span id="myN">—</span></div>
+        <div class="m"><b>Trend (last 10)</b><span id="myTrend">—</span></div>
+      </div>
+      <canvas class="spark" id="spark"></canvas>
+    </div>
+    <div class="card">
+      <b style="font-size:13px">Your last 10</b>
+      <table style="margin-top:8px"><thead><tr><th>When</th><th>Score</th><th>Note</th><th>Cracks</th><th>Strike</th></tr></thead>
+      <tbody id="myRows"><tr><td colspan="5" class="hint">No hums yet.</td></tr></tbody></table>
+    </div>
+    <div class="card" id="strikeCard">
+      <b style="font-size:13px">Does a better hum mean a better strike?</b>
+      <div class="hint" id="corrText" style="margin-top:6px">Rate a few strikes and this fills in.</div>
+      <canvas class="spark" id="scatter" style="height:140px"></canvas>
+    </div>
+  </section>
+
+  <!-- ── LEADERBOARD ───────────────────────────────────────────────────── -->
+  <section class="view" id="v-all">
+    <div class="card">
+      <div class="rowm" style="margin-top:0">
+        <div class="m"><b>Hums measured</b><span class="big" id="allN">—</span></div>
+        <div class="m"><b>Average hum</b><span class="big" id="allAvg">—</span></div>
+      </div>
+      <div class="hint" id="allNote" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <b style="font-size:13px">All-time board</b>
+      <table style="margin-top:8px"><thead><tr><th>#</th><th>Golfer</th><th>Best</th><th>Hums</th></tr></thead>
+      <tbody id="allRows"><tr><td colspan="4" class="hint">—</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <b style="font-size:13px">Most improved</b>
+      <div class="hint" style="margin-top:2px">First 3 hums vs last 3. This is the one worth winning.</div>
+      <table style="margin-top:8px"><thead><tr><th>#</th><th>Golfer</th><th>Gain</th></tr></thead>
+      <tbody id="impRows"><tr><td colspan="3" class="hint">—</td></tr></tbody></table>
+    </div>
+  </section>
+</div>
+
+<nav>
+  <button class="on" data-v="hum">HUM</button>
+  <button data-v="me">MY BOARD</button>
+  <button data-v="all">EVERYONE</button>
+</nav>
+
+<script src="hum-core.js"></script>
+<script>
+/* ═════════════════════════════════════════════════════════════════════════════
+   HUM BOARD — V2
+
+   V1 is hum-meter.html: one link, one hum, one score, no memory. It ships today.
+   This is the version with a memory: an identity, a personal board, a strike
+   rating, and a leaderboard.
+
+   THE STORAGE DECISION, because everything else hangs off it.
+   This page works with NO backend at all — every hum is written to localStorage
+   and the board reads from there. Fill in CLOUD below and the exact same code
+   mirrors to a server, which is what makes "your hums on any device" and a real
+   leaderboard possible. Nothing about the UI changes. That is deliberate: it
+   means the thing can go live this week and grow a backend later without a
+   rewrite, instead of waiting on infrastructure to launch at all.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+const CLOUD = {
+  url:  '',      // e.g. https://xxxx.supabase.co/rest/v1
+  key:  '',      // the ANON key. Public by design; row-level security does the work.
+  table:'hums'
+};
+const cloudOn = () => !!(CLOUD.url && CLOUD.key);
+
+/* ── IDENTITY ─────────────────────────────────────────────────────────────────
+   No password, no email, no signup screen. A cold Instagram audience will not
+   create an account to try a toy — they bounce, and the dataset never happens.
+   So: a random id minted on first visit, a display name they can set whenever,
+   and a recovery code they can carry to another device. Ask for an email later,
+   once they have a board worth keeping. That is when the trade feels fair.      */
+const IDK='humBoardId', NMK='humBoardName';
+function uid(){ return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+  (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c/4).toString(16)); }
+let ME = localStorage.getItem(IDK) || (localStorage.setItem(IDK, uid()), localStorage.getItem(IDK));
+let NAME = localStorage.getItem(NMK) || '';
+function renderWho(){
+  document.getElementById('who').textContent =
+    (NAME ? NAME : 'Unnamed golfer') + ' · ' + ME.slice(0,8);
+}
+document.getElementById('editname').onclick = () => {
+  const n = prompt('What should the board call you?', NAME||'');
+  if(n===null) return;
+  NAME = n.trim().slice(0,24); localStorage.setItem(NMK, NAME); renderWho();
+  Store.renameAll(NAME); paintMe(); paintAll();
+};
+
+/* ── STORE ────────────────────────────────────────────────────────────────────
+   One interface, two backings. Local always writes (so the board is instant and
+   works on a plane); cloud mirrors when configured and is the source of truth for
+   anything involving other people.                                              */
+const LSK='humBoardHums';
+const Store = {
+  localAll(){ try{ return JSON.parse(localStorage.getItem(LSK)||'[]'); }catch(e){ return []; } },
+  localPut(rows){ localStorage.setItem(LSK, JSON.stringify(rows.slice(-500))); },
+
+  async add(rec){
+    const rows = this.localAll(); rows.push(rec); this.localPut(rows);
+    if(cloudOn()){
+      try{
+        await fetch(CLOUD.url+'/'+CLOUD.table, {method:'POST',
+          headers:{'Content-Type':'application/json', apikey:CLOUD.key,
+                   Authorization:'Bearer '+CLOUD.key, Prefer:'return=minimal'},
+          body: JSON.stringify(rec)});
+      }catch(e){ /* offline is fine — the local copy is authoritative for MY board */ }
+    }
+    return rec;
+  },
+
+  async patch(id, fields){
+    const rows=this.localAll(); const r=rows.find(x=>x.hum_id===id);
+    if(r) Object.assign(r, fields);
+    this.localPut(rows);
+    if(cloudOn()){
+      try{ await fetch(CLOUD.url+'/'+CLOUD.table+'?hum_id=eq.'+id, {method:'PATCH',
+        headers:{'Content-Type':'application/json', apikey:CLOUD.key,
+                 Authorization:'Bearer '+CLOUD.key, Prefer:'return=minimal'},
+        body: JSON.stringify(fields)}); }catch(e){}
+    }
+  },
+
+  renameAll(name){
+    const rows=this.localAll(); rows.forEach(r=>{ if(r.player_id===ME) r.name=name; });
+    this.localPut(rows);
+    if(cloudOn()){ fetch(CLOUD.url+'/'+CLOUD.table+'?player_id=eq.'+ME, {method:'PATCH',
+      headers:{'Content-Type':'application/json', apikey:CLOUD.key,
+               Authorization:'Bearer '+CLOUD.key, Prefer:'return=minimal'},
+      body: JSON.stringify({name})}).catch(()=>{}); }
+  },
+
+  mine(){ return this.localAll().filter(r=>r.player_id===ME)
+              .sort((a,b)=> a.at < b.at ? 1 : -1); },
+
+  /* Everyone. Without a backend this can only ever be the hums on THIS device, and
+     the UI says so rather than pretending a leaderboard of one is a leaderboard.  */
+  async everyone(){
+    if(!cloudOn()) return { rows: this.localAll(), local:true };
+    try{
+      const r = await fetch(CLOUD.url+'/'+CLOUD.table+'?select=*&order=at.desc&limit=5000',
+        {headers:{apikey:CLOUD.key, Authorization:'Bearer '+CLOUD.key}});
+      return { rows: await r.json(), local:false };
+    }catch(e){ return { rows:this.localAll(), local:true }; }
+  }
+};
+
+/* ── AUDIO ────────────────────────────────────────────────────────────────────
+   Same pitch pipeline as the live meter (hum-core.js), plus two things the simple
+   meter does not do: a wind measurement and an impact detector.                  */
+const H = window.HUM;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let ac, stream, an, timer, running=false, hiBand=[], loBand=[], t0=0;
+
+function fit(){ const r=cv.getBoundingClientRect(), d=devicePixelRatio||1;
+  cv.width=r.width*d; cv.height=r.height*d; ctx.setTransform(d,0,0,d,0,0); }
+addEventListener('resize', ()=>{ fit(); draw(); });
+
+async function start(){
+  if(running) return stop();
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio:{
+      echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+  }catch(e){
+    document.getElementById('live').textContent =
+      'I need the microphone. Allow it in your browser settings, then tap again.'; return;
+  }
+  ac = new (window.AudioContext||window.webkitAudioContext)();
+  const src = ac.createMediaStreamSource(stream);
+  an = ac.createAnalyser(); an.fftSize = 2048; src.connect(an);
+  const buf = new Float32Array(an.fftSize);
+  const spec = new Uint8Array(an.frequencyBinCount);
+
+  H.setFrames([]); hiBand=[]; loBand=[]; running=true; t0=Date.now();
+  const b=document.getElementById('go'); b.classList.add('rec'); b.textContent='Recording — tap to stop';
+  document.getElementById('res').style.display='none';
+
+  timer = setInterval(()=>{
+    an.getFloatTimeDomainData(buf);
+    an.getByteFrequencyData(spec);
+    const d = H.detect(buf, ac.sampleRate, H.SR_MIN);
+    H.getFrames().push({hz: d ? d.hz : 0, clarity: d ? d.clarity : 0});
+
+    // Band energies. LOW is where wind lives; HIGH is where a strike lives and a
+    // hum does not. Bin width = sampleRate / fftSize.
+    const bw = ac.sampleRate/an.fftSize;
+    let lo=0, mid=0, hi=0;
+    for(let i=1;i<spec.length;i++){
+      const f=i*bw, v=spec[i]/255;
+      if(f<100) lo+=v; else if(f<1200) mid+=v; else if(f<8000) hi+=v;
+    }
+    loBand.push(lo/(lo+mid+1e-9)); hiBand.push(hi);
+    draw();
+    if(Date.now()-t0 > 15000) stop();      // hard stop, nobody hums for 15 seconds
+  }, H.HOP);
+}
+
+function stop(){
+  if(!running) return;
+  running=false; clearInterval(timer);
+  stream.getTracks().forEach(t=>t.stop()); ac.close();
+  const b=document.getElementById('go'); b.classList.remove('rec'); b.textContent='Hum again';
+
+  let fr = H.getFrames();
+  let a=0, z=fr.length-1;
+  while(a<fr.length && !fr[a].hz) a++;
+  while(z>0 && !fr[z].hz) z--;
+  if(z-a < 10){ document.getElementById('live').textContent =
+    'Didn’t hear a hum. Hold one note, closer to the phone.'; return; }
+  const off=a;
+  H.setFrames(fr.slice(a,z+1)); fr=H.getFrames();
+  hiBand = hiBand.slice(a,z+1); loBand = loBand.slice(a,z+1);
+
+  // ── THE WIND GATE ──────────────────────────────────────────────────────────
+  // Refuse rather than guess. A wrong score loses trust for good; "I couldn't hear
+  // that fairly" costs nothing and reads as honest.
+  const rumble = loBand.length ? loBand.reduce((s,x)=>s+x,0)/loBand.length : 0;
+  const q = H.signalQuality(fr, rumble);
+  if(!q.ok){
+    showWind(q); draw(); return;
+  }
+  clearWind();
+
+  const voiced = fr.filter(f=>f.hz).map(f=>f.hz);
+  if(voiced.length) H.resolveOctaves(H.confirmNoteOctave(H.robustNote(voiced)));
+  fr.forEach(f=>{ f.drawHz=f.hz; });
+  H.deHash();
+
+  const s = H.score();
+  if(!s){ document.getElementById('live').textContent='Not enough of a hum to score.'; return; }
+
+  // Impact is a LANDMARK, not the end of the hum. He hums through the strike; when
+  // the hum STOPS at the strike, that is the restriction we are looking for.
+  const imp = H.findImpact(hiBand);
+  s.impact = imp;
+  s.through = imp ? H.throughImpact(fr, imp.frame, 400) : null;
+
+  window.__lastScore = s;
+  draw();
+  showResult(s);
+}
+document.getElementById('go').onclick = start;
+
+function showWind(q){
+  const why = q.fails.includes('rumble') ? 'Too much wind on the mic.'
+            : q.fails.includes('voiced') ? 'I lost the note too often to score that.'
+            : 'Too much background noise to score that fairly.';
+  document.getElementById('blocker').innerHTML =
+    '<div class="warnbox"><b>⚠️ Too windy — hum that one again</b>' + why +
+    ' Turn out of the wind, or cup a hand round the phone, and go again.' +
+    ' <span class="hint">(I’d rather give you nothing than give you a wrong number.)</span></div>';
+  document.getElementById('res').style.display='none';
+}
+function clearWind(){ document.getElementById('blocker').innerHTML=''; }
+
+/* ── THE TRACE ────────────────────────────────────────────────────────────────
+   Same rules the live meter settled on: octave-corrected so a perfect hum draws a
+   perfect line, never smoothed because the jaggedness IS the measurement, cracks
+   marked from the scorer, and a spike drawn at full depth rather than clamped.   */
+function draw(){
+  const w=cv.clientWidth, h=cv.clientHeight;
+  ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d1420'; ctx.fillRect(0,0,w,h);
+  const fr=H.getFrames(); const v=fr.filter(f=>f.hz);
+  const GUT=40;
+  if(v.length<2){
+    ctx.strokeStyle='#182234'; ctx.lineWidth=1;
+    for(let i=1;i<5;i++){const y=h*i/5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+    return;
+  }
+  const med=H.median(v.map(f=>f.hz));
+  const VIEW_MAX=800;
+  const cAll=fr.map(f=>{const hz=f.drawHz!==undefined?f.drawHz:f.hz;
+    return hz?1200*Math.log2(hz/med):null;}).filter(x=>x!==null).sort((a,b)=>a-b);
+  const qq=t=>cAll[Math.min(cAll.length-1,Math.max(0,Math.round(t*(cAll.length-1))))];
+  let lo=Math.min(-H.VIEW_CENTS,qq(0.02)), hi=Math.max(H.VIEW_CENTS,qq(0.98));
+  const pad=(hi-lo)*0.10; lo=Math.max(lo-pad,-VIEW_MAX); hi=Math.min(hi+pad,VIEW_MAX);
+  const yOf=hz=>h-((1200*Math.log2(hz/med))-lo)/(hi-lo)*h;
+
+  const centre=H.noteOf(med);
+  const sLo=Math.floor(lo/100)-1, sHi=Math.ceil(hi/100)+1;
+  ctx.font='9px -apple-system,system-ui,sans-serif'; ctx.textBaseline='middle';
+  const dense=(sHi-sLo)>26;
+  for(let s=sLo;s<=sHi;s++){
+    const yT=yOf(centre.hz*Math.pow(2,(s+0.5)/12)), yB=yOf(centre.hz*Math.pow(2,(s-0.5)/12));
+    if(yB<0||yT>h) continue;
+    const nm=H.noteOf(centre.hz*Math.pow(2,s/12));
+    const black=nm.name.includes('♯');
+    ctx.fillStyle = black?'rgba(255,255,255,.010)':'rgba(255,255,255,.026)';
+    ctx.fillRect(GUT,Math.max(0,yT),w-GUT,Math.min(h,yB)-Math.max(0,yT));
+    ctx.strokeStyle=(s===0)?'#33475f':'#141d2b'; ctx.lineWidth=(s===0)?1.4:1;
+    ctx.beginPath(); ctx.moveTo(GUT,yB); ctx.lineTo(w,yB); ctx.stroke();
+    const yc=(yT+yB)/2;
+    if(yc>7&&yc<h-7&&(!dense||s%2===0||s===0)){
+      ctx.fillStyle=(s===0)?'#9fb4cd':'#46586e'; ctx.fillText(nm.name,4,yc);
+    }
+  }
+  const S=window.__lastScore;
+  ctx.save(); ctx.beginPath(); ctx.rect(GUT,0,w-GUT,h); ctx.clip();
+  ctx.lineWidth=1.5; ctx.lineJoin='miter'; ctx.lineCap='butt'; ctx.strokeStyle='#f2f6fb';
+  let pen=false; ctx.beginPath();
+  fr.forEach((f,i)=>{
+    const x=GUT+i/(Math.max(fr.length,1)-1)*(w-GUT);
+    const hz=f.drawHz!==undefined?f.drawHz:f.hz;
+    if(!hz){pen=false;return;}
+    const y=yOf(hz);
+    if(!pen){ctx.moveTo(x,y);pen=true;}else ctx.lineTo(x,y);
+  });
+  ctx.stroke(); ctx.restore();
+
+  // impact — a blue landmark, deliberately NOT the same colour as a crack, because
+  // hitting the ball is not a mistake
+  if(S && S.impact){
+    const x=GUT+(S.impact.frame+(S.humStart||0))/(Math.max(fr.length,1)-1)*(w-GUT);
+    ctx.strokeStyle='#7fd4ff'; ctx.lineWidth=1.2; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#7fd4ff'; ctx.font='700 10px -apple-system,system-ui,sans-serif';
+    ctx.fillText('IMPACT', x+4, 12);
+  }
+  if(S && S.cracks && S.cracks.length){
+    S.cracks.forEach(c=>{
+      const fi=Math.round(c.at*1000/H.HOP)+(S.humStart||0);
+      const x=GUT+fi/(Math.max(fr.length,1)-1)*(w-GUT);
+      ctx.strokeStyle='#ff6b6b'; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+      ctx.fillStyle='#ff6b6b'; ctx.beginPath();
+      ctx.moveTo(x-4.5,1); ctx.lineTo(x+4.5,1); ctx.lineTo(x,9); ctx.closePath(); ctx.fill();
+    });
+  }
+}
+
+/* ── RESULT ─────────────────────────────────────────────────────────────────── */
+let pendingHum = null;
+function showResult(s){
+  const b = s.total>=H.CAL.bands.ELITE ? ['ELITE','var(--go)']
+          : s.total>=H.CAL.bands.CLEAN ? ['CLEAN','var(--ok)']
+          : s.total>=H.CAL.bands.SHAKY ? ['SHAKY','var(--warn)']
+          : ['NEEDS WORK','var(--bad)'];
+  document.getElementById('sc').textContent = s.total.toFixed(0);
+  document.getElementById('sc').style.color = b[1];
+  document.getElementById('bd').textContent = b[0];
+  document.getElementById('bd').style.color = b[1];
+
+  let say;
+  if(s.through && s.through.restrictedAt)
+    say = 'Your hum stopped AT the ball. That is where you tightened up — the whole game is keeping the sound going through it.';
+  else if(s.cracks.length)
+    say = 'Your hum cracked ' + (s.cracks.length===1?'once':s.cracks.length+' times')
+        + ', first at ' + s.cracks[0].at.toFixed(1) + 's. A hum that cracks cannot score above 75.';
+  else if(s.through && s.through.survived)
+    say = 'You held the note straight through the ball. That is the one that matters.';
+  else say = b[0]==='ELITE' ? 'One clean line the whole way. Almost nobody does that.'
+           : 'One line the whole way. Solid.';
+  document.getElementById('sy').textContent = say;
+
+  document.getElementById('m0').textContent = H.noteOf(s.note).name+' · '+s.note.toFixed(0)+' Hz';
+  document.getElementById('m1').textContent = Math.round(s.line)+'/100';
+  document.getElementById('m2').textContent = !s.through ? 'no strike heard'
+      : s.through.survived ? 'held it ✓' : 'stopped at the ball';
+  document.getElementById('m3').textContent = s.cracks.length
+      ? s.cracks.length+' · first '+s.cracks[0].at.toFixed(1)+'s' : 'none';
+  document.getElementById('res').style.display='';
+
+  pendingHum = {
+    hum_id: uid(), player_id: ME, name: NAME || null,
+    at: new Date().toISOString(),
+    score: +s.total.toFixed(1), band: b[0],
+    line: +s.line.toFixed(1), on_air: +s.onAir.toFixed(1),
+    note_hz: +s.note.toFixed(1), note_name: H.noteOf(s.note).name,
+    jitter: +s.jitter.toFixed(1), tilt: Math.round(s.tilt),
+    cracks: s.cracks.length, tension: s.tension.length,
+    through_impact: s.through ? (s.through.survived?1:0) : null,
+    span_s: +s.span.toFixed(2), strike: null
+  };
+  Store.add(pendingHum).then(()=>{ paintMe(); paintAll(); });
+  buildStrike();
+}
+
+/* ── THE STRIKE RATING ────────────────────────────────────────────────────────
+   One tap, right after the score, while the shot is still in their hands.
+   This is the whole point of the product: hum score paired with strike quality is
+   the only data that can prove — or kill — "the finer your hum, the better you hit
+   it." Self-rating is noisy per shot and perfectly fine in aggregate.            */
+function buildStrike(){
+  const wrap=document.getElementById('strike'); wrap.innerHTML='';
+  document.getElementById('strikeDone').style.display='none';
+  for(let i=0;i<=10;i++){
+    const b=document.createElement('button'); b.textContent=i;
+    b.onclick=()=>{
+      [...wrap.children].forEach(c=>c.classList.remove('sel'));
+      b.classList.add('sel');
+      if(pendingHum){
+        pendingHum.strike=i; Store.patch(pendingHum.hum_id,{strike:i}).then(paintMe);
+        const d=document.getElementById('strikeDone');
+        d.style.display=''; d.textContent='Logged. That pairing is what makes this get smarter.';
+      }
+    };
+    wrap.appendChild(b);
+  }
+}
+
+/* ── MY BOARD ─────────────────────────────────────────────────────────────── */
+function paintMe(){
+  const rows = Store.mine();
+  const n=rows.length;
+  document.getElementById('myN').textContent = n;
+  if(!n){ document.getElementById('myBest').textContent='—';
+          document.getElementById('myAvg').textContent='—';
+          document.getElementById('myTrend').textContent='—'; return; }
+  const best=Math.max(...rows.map(r=>r.score));
+  const avg=rows.reduce((s,r)=>s+r.score,0)/n;
+  document.getElementById('myBest').textContent=best.toFixed(0);
+  document.getElementById('myAvg').textContent=avg.toFixed(0);
+  const last=rows.slice(0,10).map(r=>r.score).reverse();
+  if(last.length>=4){
+    const h=last.length>>1;
+    const d=(last.slice(h).reduce((s,x)=>s+x,0)/(last.length-h))
+           -(last.slice(0,h).reduce((s,x)=>s+x,0)/h);
+    document.getElementById('myTrend').textContent=(d>=0?'+':'')+d.toFixed(1)+' pts';
+    document.getElementById('myTrend').style.color = d>=0?'var(--go)':'var(--bad)';
+  } else document.getElementById('myTrend').textContent='need 4 hums';
+
+  const tb=document.getElementById('myRows'); tb.innerHTML='';
+  rows.slice(0,10).forEach(r=>{
+    const tr=document.createElement('tr');
+    const when=new Date(r.at); 
+    tr.innerHTML='<td>'+when.toLocaleDateString(undefined,{month:'short',day:'numeric'})+
+      ' '+when.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})+'</td>'+
+      '<td><b>'+r.score.toFixed(0)+'</b></td><td>'+(r.note_name||'—')+'</td>'+
+      '<td>'+(r.cracks||0)+'</td><td>'+(r.strike==null?'—':r.strike)+'</td>';
+    tb.appendChild(tr);
+  });
+  sparkline(document.getElementById('spark'), rows.map(r=>r.score).reverse());
+  scatter(rows.filter(r=>r.strike!=null));
+}
+
+function sparkline(c, vals){
+  const d=devicePixelRatio||1, r=c.getBoundingClientRect();
+  c.width=r.width*d; c.height=r.height*d;
+  const g=c.getContext('2d'); g.setTransform(d,0,0,d,0,0);
+  const w=r.width,h=r.height; g.clearRect(0,0,w,h);
+  if(vals.length<2) return;
+  // Fixed 0–100 axis on purpose: the bands are fixed so a line over weeks MEANS
+  // something. An auto-scaled sparkline would make every session look identical.
+  const yOf=v=>h-4-(v/100)*(h-8);
+  [60,70,85].forEach(b=>{ g.strokeStyle='#1b2735'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(0,yOf(b)); g.lineTo(w,yOf(b)); g.stroke(); });
+  g.strokeStyle='#3ef2a0'; g.lineWidth=2; g.lineJoin='round'; g.beginPath();
+  vals.forEach((v,i)=>{ const x=(i/(vals.length-1))*w, y=yOf(v);
+    i?g.lineTo(x,y):g.moveTo(x,y); });
+  g.stroke();
+  g.fillStyle='#3ef2a0';
+  const lx=w, ly=yOf(vals[vals.length-1]);
+  g.beginPath(); g.arc(lx-3,ly,3,0,7); g.fill();
+}
+
+function scatter(rows){
+  const c=document.getElementById('scatter');
+  const d=devicePixelRatio||1, r=c.getBoundingClientRect();
+  c.width=r.width*d; c.height=r.height*d;
+  const g=c.getContext('2d'); g.setTransform(d,0,0,d,0,0);
+  const w=r.width,h=r.height; g.clearRect(0,0,w,h);
+  const txt=document.getElementById('corrText');
+  if(rows.length<5){ txt.textContent='Rate '+(5-rows.length)+' more strikes and this fills in.'; return; }
+  g.strokeStyle='#1b2735'; g.strokeRect(28,4,w-34,h-24);
+  rows.forEach(p=>{
+    const x=28+(p.score/100)*(w-34), y=h-20-(p.strike/10)*(h-24);
+    g.fillStyle='rgba(62,242,160,.75)'; g.beginPath(); g.arc(x,y,3.5,0,7); g.fill();
+  });
+  g.fillStyle='#8ea3bd'; g.font='9px -apple-system,system-ui,sans-serif';
+  g.fillText('strike 10',2,10); g.fillText('0',20,h-18); g.fillText('hum score →',w-70,h-4);
+  // Pearson r. Reported with the n, and hedged below 15 pairs, because a correlation
+  // off six shots is a coin flip with a decimal point.
+  const xs=rows.map(p=>p.score), ys=rows.map(p=>p.strike);
+  const mx=xs.reduce((a,b)=>a+b,0)/xs.length, my=ys.reduce((a,b)=>a+b,0)/ys.length;
+  let num=0,dx=0,dy=0;
+  xs.forEach((x,i)=>{ num+=(x-mx)*(ys[i]-my); dx+=(x-mx)**2; dy+=(ys[i]-my)**2; });
+  const rr = (dx&&dy) ? num/Math.sqrt(dx*dy) : 0;
+  txt.innerHTML = rows.length<15
+    ? '<b>r = '+rr.toFixed(2)+'</b> over '+rows.length+' shots — too few to trust yet. Keep rating.'
+    : (rr>0.3 ? '<b>r = '+rr.toFixed(2)+'</b> over '+rows.length+' shots. Your better hums really do go with your better strikes.'
+      : rr<-0.3 ? '<b>r = '+rr.toFixed(2)+'</b> over '+rows.length+' shots — the opposite of expected. Worth a look.'
+      : '<b>r = '+rr.toFixed(2)+'</b> over '+rows.length+' shots. No clear link yet on your swings.');
+}
+
+/* ── EVERYONE ─────────────────────────────────────────────────────────────── */
+async function paintAll(){
+  const {rows, local} = await Store.everyone();
+  document.getElementById('allNote').textContent = local
+    ? 'No server connected yet, so this is only the hums recorded on this device.'
+    : rows.length + ' hums from ' + new Set(rows.map(r=>r.player_id)).size + ' golfers.';
+  document.getElementById('allN').textContent = rows.length;
+  document.getElementById('allAvg').textContent = rows.length
+    ? (rows.reduce((s,r)=>s+r.score,0)/rows.length).toFixed(0) : '—';
+
+  const by={};
+  rows.forEach(r=>{ (by[r.player_id] = by[r.player_id] || []).push(r); });
+  const players = Object.entries(by).map(([id,rs])=>{
+    rs.sort((a,b)=> a.at<b.at?-1:1);
+    const first=rs.slice(0,3), last=rs.slice(-3);
+    const avg=a=>a.reduce((s,r)=>s+r.score,0)/a.length;
+    return { id, name: (rs.find(r=>r.name)||{}).name || 'Unnamed golfer',
+             best: Math.max(...rs.map(r=>r.score)), n: rs.length,
+             gain: rs.length>=6 ? avg(last)-avg(first) : null };
+  });
+
+  const tb=document.getElementById('allRows'); tb.innerHTML='';
+  players.sort((a,b)=>b.best-a.best).slice(0,20).forEach((p,i)=>{
+    const tr=document.createElement('tr'); if(p.id===ME) tr.className='me';
+    tr.innerHTML='<td>'+(i+1)+'</td><td>'+esc(p.name)+(p.id===ME?' <span class="pill" style="background:#12362a;color:#3ef2a0">you</span>':'')+
+      '</td><td><b>'+p.best.toFixed(0)+'</b></td><td>'+p.n+'</td>';
+    tb.appendChild(tr);
+  });
+  if(!players.length) tb.innerHTML='<tr><td colspan="4" class="hint">No hums yet.</td></tr>';
+
+  const ib=document.getElementById('impRows'); ib.innerHTML='';
+  const imp=players.filter(p=>p.gain!=null).sort((a,b)=>b.gain-a.gain).slice(0,10);
+  imp.forEach((p,i)=>{
+    const tr=document.createElement('tr'); if(p.id===ME) tr.className='me';
+    tr.innerHTML='<td>'+(i+1)+'</td><td>'+esc(p.name)+'</td><td style="color:'+
+      (p.gain>=0?'var(--go)':'var(--bad)')+'"><b>'+(p.gain>=0?'+':'')+p.gain.toFixed(1)+'</b></td>';
+    ib.appendChild(tr);
+  });
+  if(!imp.length) ib.innerHTML='<tr><td colspan="3" class="hint">Needs 6 hums from someone.</td></tr>';
+}
+function esc(s){ return String(s).replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+
+/* ── NAV ──────────────────────────────────────────────────────────────────── */
+document.querySelectorAll('nav button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('v-'+b.dataset.v).classList.add('on');
+    if(b.dataset.v==='me') paintMe();
+    if(b.dataset.v==='all') paintAll();
+  };
+});
+
+renderWho(); fit(); draw(); paintMe(); paintAll();
+</script>
+</body></html>
