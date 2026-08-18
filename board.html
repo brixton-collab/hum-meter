@@ -107,6 +107,12 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
       <table style="margin-top:8px"><thead><tr><th>When</th><th>Score</th><th>Note</th><th>Cracks</th><th>Strike</th></tr></thead>
       <tbody id="myRows"><tr><td colspan="5" class="hint">No hums yet.</td></tr></tbody></table>
     </div>
+    <div class="card" id="tensionCard">
+      <b style="font-size:13px">Where you lose it</b>
+      <div class="hint" style="margin-top:2px">Every crack you've had, lined up on the ball.</div>
+      <canvas class="spark" id="tension" style="height:120px"></canvas>
+      <div class="hint" id="tensionText" style="margin-top:8px">Needs a few swing hums.</div>
+    </div>
     <div class="card" id="strikeCard">
       <b style="font-size:13px">Does a better hum mean a better strike?</b>
       <div class="hint" id="corrText" style="margin-top:6px">Rate a few strikes and this fills in.</div>
@@ -180,9 +186,31 @@ function uid(){ return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
 let ME = localStorage.getItem(IDK) || (localStorage.setItem(IDK, uid()), localStorage.getItem(IDK));
 let NAME = localStorage.getItem(NMK) || '';
 function renderWho(){
-  document.getElementById('who').textContent =
-    (NAME ? NAME : 'Unnamed golfer') + ' · ' + ME.slice(0,8);
+  const el=document.getElementById('who');
+  el.innerHTML = (NAME ? esc(NAME) : 'Unnamed golfer') +
+    ' · <span style="text-decoration:underline;cursor:pointer" id="rec">' +
+    ME.slice(0,8) + '</span>';
+  el.querySelector('#rec').onclick = recoveryUI;
 }
+/* ── CARRYING A BOARD TO ANOTHER PHONE ────────────────────────────────────────
+   No account means no password to reset — and also no way to move. The compromise
+   is a recovery code that IS the id: paste it on the new phone and the board comes
+   with you. It is deliberately not a login: nothing is protected by it, so losing it
+   costs a board and never anything else.                                          */
+document.getElementById('editname').ondblclick = null;
+function recoveryUI(){
+  const code = ME;
+  const entered = prompt(
+    'YOUR RECOVERY CODE — save this to move your board to another phone:\n\n' + code +
+    '\n\nTo LOAD a board from another phone, paste its code here and press OK.\n' +
+    'Leave it as-is to keep this one.', code);
+  if(entered && entered.trim() && entered.trim() !== ME){
+    ME = entered.trim(); localStorage.setItem(IDK, ME);
+    renderWho(); paintMe(); paintAll();
+    alert('Loaded. If that board lives on a server you will see its hums; if not, only what is on this phone.');
+  }
+}
+
 document.getElementById('editname').onclick = () => {
   const n = prompt('What should the board call you?', NAME||'');
   if(n===null) return;
@@ -472,7 +500,15 @@ function showResult(s){
     jitter: +s.jitter.toFixed(1), tilt: Math.round(s.tilt),
     cracks: s.cracks.length, tension: s.tension.length,
     through_impact: s.through ? (s.through.survived?1:0) : null,
-    span_s: +s.span.toFixed(2), strike: null
+    span_s: +s.span.toFixed(2), strike: null,
+    // WHERE the hum broke, measured from the ball rather than from the start of the
+    // recording. Seconds-from-impact is the only frame of reference that is comparable
+    // between two swings - "cracked at 1.8s" means nothing, "cracked 0.4s before you hit
+    // it" is a coaching instruction. This one column is what makes the tension insight
+    // possible, and it costs nothing to store.
+    crack_rel: (s.impact && s.cracks.length)
+      ? s.cracks.map(c => +(c.at - s.impact.frame*H.HOP/1000).toFixed(2)) : null,
+    impact_at: s.impact ? +(s.impact.frame*H.HOP/1000).toFixed(2) : null
   };
   Store.add(pendingHum).then(()=>{ paintMe(); paintAll(); });
   buildStrike();
@@ -506,6 +542,8 @@ function paintMe(){
   const rows = Store.mine();
   const n=rows.length;
   document.getElementById('myN').textContent = n;
+  document.getElementById('tensionCard').style.display = n ? '' : 'none';
+  document.getElementById('strikeCard').style.display  = n ? '' : 'none';
   if(!n){ document.getElementById('myBest').textContent='—';
           document.getElementById('myAvg').textContent='—';
           document.getElementById('myTrend').textContent='—'; return; }
@@ -533,6 +571,7 @@ function paintMe(){
     tb.appendChild(tr);
   });
   sparkline(document.getElementById('spark'), rows.map(r=>r.score).reverse());
+  tensionPlot(rows);
   scatter(rows.filter(r=>r.strike!=null));
 }
 
@@ -554,6 +593,58 @@ function sparkline(c, vals){
   g.fillStyle='#3ef2a0';
   const lx=w, ly=yOf(vals[vals.length-1]);
   g.beginPath(); g.arc(lx-3,ly,3,0,7); g.fill();
+}
+
+/* ── WHERE YOU LOSE IT ────────────────────────────────────────────────────────
+   The one thing this can tell a golfer that nothing else can. Every crack they have
+   ever had, plotted against the ball rather than against the clock, so a pattern
+   across many swings becomes visible in a way it never is inside one swing.
+
+   On Brixton's own 1:21 swing all four cracks landed inside the last second before
+   impact, and the first was a 260 ms breath hold 0.28 s BEFORE the takeaway. That is
+   a personal, timestamped diagnosis - and it is the reason to come back.            */
+function tensionPlot(rows){
+  const c=document.getElementById('tension');
+  const d=devicePixelRatio||1, r=c.getBoundingClientRect();
+  c.width=r.width*d; c.height=r.height*d;
+  const g=c.getContext('2d'); g.setTransform(d,0,0,d,0,0);
+  const w=r.width,h=r.height; g.clearRect(0,0,w,h);
+  const txt=document.getElementById('tensionText');
+
+  const all=[];
+  rows.forEach(x=>{ if(Array.isArray(x.crack_rel)) x.crack_rel.forEach(v=>all.push(v)); });
+  if(all.length<3){ txt.textContent='Needs a few swing hums with the ball in them.'; return; }
+
+  const LO=-2.5, HI=1.5;                       // 2.5s before the ball to 1.5s after
+  const xOf=t=>28+((Math.max(LO,Math.min(HI,t))-LO)/(HI-LO))*(w-36);
+  // the ball
+  const bx=xOf(0);
+  g.fillStyle='rgba(127,212,255,.10)'; g.fillRect(bx-1,0,2,h-18);
+  g.strokeStyle='#7fd4ff'; g.lineWidth=1.5; g.setLineDash([4,4]);
+  g.beginPath(); g.moveTo(bx,0); g.lineTo(bx,h-18); g.stroke(); g.setLineDash([]);
+  g.fillStyle='#7fd4ff'; g.font='700 10px -apple-system,system-ui,sans-serif';
+  g.fillText('THE BALL', bx+5, 11);
+  // histogram of cracks
+  const NB=24, bins=new Array(NB).fill(0);
+  all.forEach(t=>{ const k=Math.floor(((Math.max(LO,Math.min(HI,t))-LO)/(HI-LO))*(NB-1e-9));
+                   bins[Math.max(0,Math.min(NB-1,k))]++; });
+  const mx=Math.max(...bins,1), bw=(w-36)/NB;
+  bins.forEach((v,i)=>{ if(!v) return;
+    const bh=(v/mx)*(h-34);
+    g.fillStyle='rgba(255,107,107,.75)';
+    g.fillRect(28+i*bw+1, h-18-bh, bw-2, bh); });
+  g.strokeStyle='#1b2735'; g.beginPath(); g.moveTo(28,h-18); g.lineTo(w,h-18); g.stroke();
+  g.fillStyle='#8ea3bd'; g.font='9px -apple-system,system-ui,sans-serif';
+  g.fillText('2.5s before',30,h-6); g.fillText('after',w-32,h-6);
+
+  const before=all.filter(t=>t<0), med=[...all].sort((a,b)=>a-b)[all.length>>1];
+  const pct=Math.round(before.length/all.length*100);
+  txt.innerHTML = pct>=65
+    ? '<b>'+pct+'% of your cracks happen BEFORE you hit it</b> — typically '
+      + Math.abs(med).toFixed(1) + 's before the ball. That is where you tighten up.'
+    : pct<=35
+    ? '<b>'+(100-pct)+'% of your cracks happen AFTER the ball.</b> You hold it into the strike and let go on the other side.'
+    : '<b>Your cracks are spread either side of the ball</b> — no single tension point yet. Keep logging.';
 }
 
 function scatter(rows){
