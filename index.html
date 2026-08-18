@@ -17,7 +17,7 @@
   .sub{color:var(--dim);font-size:14px;margin:0 0 20px}
   .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;
     padding:14px;margin-bottom:16px}
-  canvas{width:100%;height:190px;display:block;border-radius:10px;background:#0d1420}
+  canvas{width:100%;height:320px;display:block;border-radius:10px;background:#0d1420}
   .hz{display:flex;justify-content:space-between;align-items:baseline;
     margin-top:10px;font-variant-numeric:tabular-nums}
   .hz b{font-size:26px;font-weight:700}
@@ -239,7 +239,12 @@ function noteOf(hz){
 
 function draw(){
   const w=cv.clientWidth, h=cv.clientHeight;
+  // Paint the ground rather than clearing to transparent. A cleared canvas looks right
+  // in the browser because the CSS background shows through, but exports (toDataURL,
+  // the share card, a screenshot) come out with a transparent — i.e. white — bed, which
+  // washes the whole trace out.
   ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#0d1420'; ctx.fillRect(0,0,w,h);
   const v = frames.filter(f=>f.hz);
   const GUT = 40;
 
@@ -260,10 +265,24 @@ function draw(){
   // So: keep +/-350c as the floor, because a steady hum must still read as a flat line
   // and not be stretched to fill the box, but OPEN the view far enough to contain every
   // excursion. Spikes are drawn in full or they are not evidence.
-  let lo=-VIEW_CENTS, hi=VIEW_CENTS;
-  frames.forEach(f=>{ const hz = f.drawHz!==undefined ? f.drawHz : f.hz; if(!hz) return;
-    const c=1200*Math.log2(hz/med); if(c<lo) lo=c; if(c>hi) hi=c; });
-  const pad=(hi-lo)*0.08; lo-=pad; hi+=pad;
+  // Floor at +/-VIEW_CENTS so a steady hum reads as a flat line rather than being
+  // stretched to fill the box, but CAP the opening: one stray frame must never be able
+  // to squash the hum into a hairline. A spike past the cap is drawn running off the
+  // edge, which reads as a bigger crack, not a smaller one.
+  // The range is set from the BODY of the hum, not its extremes. Using min/max let a
+  // single surviving subharmonic frame open the view to 13 semitones and squash a
+  // perfect hum into a hairline — measured on his own straight-line reference. Take the
+  // 2nd/98th percentile, floor it at +/-VIEW_CENTS so a steady hum still reads flat
+  // rather than stretched, and cap it at VIEW_MAX. A spike past the cap is DRAWN running
+  // off the edge, which reads as a bigger crack, not a smaller one.
+  const VIEW_MAX = 800;
+  const cAll = frames.map(f=>{ const hz=f.drawHz!==undefined?f.drawHz:f.hz;
+                               return hz ? 1200*Math.log2(hz/med) : null; }).filter(x=>x!==null)
+                     .sort((a,b)=>a-b);
+  const q = t => cAll[Math.min(cAll.length-1, Math.max(0, Math.round(t*(cAll.length-1))))];
+  let lo=Math.min(-VIEW_CENTS, q(0.02)), hi=Math.max(VIEW_CENTS, q(0.98));
+  const pad=(hi-lo)*0.10;
+  lo=Math.max(lo-pad,-VIEW_MAX); hi=Math.min(hi+pad,VIEW_MAX);
   const yOf = hz => h - ((1200*Math.log2(hz/med))-lo)/(hi-lo)*h;
 
   // ── THE PIANO ROLL ─────────────────────────────────────────────────────────
@@ -282,7 +301,7 @@ function draw(){
     if(yB<0 || yT>h) continue;
     const nm = noteOf(centre.hz*Math.pow(2,s/12));
     const black = nm.name.includes('\u266F');
-    ctx.fillStyle = black ? 'rgba(255,255,255,.012)' : 'rgba(255,255,255,.038)';
+    ctx.fillStyle = black ? 'rgba(255,255,255,.010)' : 'rgba(255,255,255,.026)';
     ctx.fillRect(GUT, Math.max(0,yT), w-GUT, Math.min(h,yB)-Math.max(0,yT));
     ctx.strokeStyle = (s===0) ? '#33475f' : '#141d2b';
     ctx.lineWidth = (s===0) ? 1.4 : 1;
@@ -313,6 +332,7 @@ function draw(){
   // stroke hides exactly what the number is made of.
   const s = window.__lastScore;
   const hzOf = f => f.drawHz !== undefined ? f.drawHz : f.hz;
+  ctx.save(); ctx.beginPath(); ctx.rect(GUT,0,w-GUT,h); ctx.clip();
   ctx.lineWidth=1.5; ctx.lineJoin='miter'; ctx.lineCap='butt';
   ctx.strokeStyle='#f2f6fb';
   let pen=false;
@@ -325,6 +345,7 @@ function draw(){
     if(!pen){ ctx.moveTo(x,y); pen=true; } else ctx.lineTo(x,y);
   });
   ctx.stroke();
+  ctx.restore();
 
   // ── THE CRACKS ─────────────────────────────────────────────────────────────
   // Marked where they happened, in the lane where they happened, because "your hum
