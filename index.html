@@ -53,6 +53,10 @@
     word-break:break-all;-webkit-user-select:all;user-select:all;margin-bottom:12px}
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);
     font-size:15px;padding:14px}
+  .lvl{height:6px;border-radius:3px;background:#0d1420;margin-top:10px;overflow:hidden}
+  .lvl i{display:block;height:100%;width:0%;background:var(--go);
+    border-radius:3px;transition:width .06s linear}
+  .lvl i.hot{background:var(--warn)}
   .diag{margin-top:18px;display:flex;flex-direction:column;gap:8px;align-items:center}
   .diag span{color:var(--dim);font-size:12px}
   .diag button{font-size:13px;padding:11px}
@@ -69,6 +73,11 @@
   <div class="stage">
     <canvas id="cv"></canvas>
     <div class="hz"><b id="note">—</b><span id="state">ready</span></div>
+    <!-- The level bar exists so "it doesn't pick up my hum" is answerable without a
+         cable and a laptop. Bar moving but no Hz = the mic is fine, pitch detection is
+         failing. Bar dead = the mic never opened. Two completely different bugs that
+         look identical from the outside. -->
+    <div class="lvl"><i id="lvlbar"></i></div>
   </div>
 
   <button id="go">Tap to start humming</button>
@@ -153,7 +162,7 @@ const CAL = {
 };
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false;
+let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0;
 
 function fit(){ const r = cv.getBoundingClientRect(), d = devicePixelRatio||1;
   cv.width = r.width*d; cv.height = r.height*d; ctx.setTransform(d,0,0,d,0,0); draw(); }
@@ -484,9 +493,31 @@ async function start(){
   const b = blocker();
   if(b){ document.getElementById('hint').innerHTML =
     '<b style="color:var(--warn)">'+b[0]+'.</b> '+b[1]; return; }
+
+  // THE AUDIO CONTEXT MUST BE BUILT AND RESUMED *HERE* — synchronously, in the tap.
+  //
+  // iOS starts every AudioContext suspended and will only resume one inside the user
+  // gesture that created it. `await getUserMedia(...)` ends that gesture, so a context
+  // constructed after it stays suspended forever: the mic light comes on, the page
+  // looks alive, and every sample it hands you is a zero. That is precisely the "it
+  // doesn't pick up the hum" report from an iPhone, and it is invisible on a Mac
+  // because desktop browsers resume without being asked.
   try{
+    ac = new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.state === 'suspended') await ac.resume();
+  }catch(e){
+    document.getElementById('hint').innerHTML =
+      '<b style="color:var(--warn)">Audio didn’t start.</b> Reload and try again.';
+    return;
+  }
+
+  try{
+    // autoGainControl LEFT ON. Turning it off was borrowed from the desktop scorer,
+    // where level matters. Here it does not — the score is pitch only — and on a phone
+    // held at arm's length a hum without AGC comes in so quiet that the silence gate
+    // throws every frame away. Loud and pitch-accurate beats faint and pristine.
     stream = await navigator.mediaDevices.getUserMedia({audio:{
-      echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+      echoCancellation:false, noiseSuppression:false, autoGainControl:true}});
   }catch(e){
     if(inAppBrowser()){ showEscapeHatch();
       document.getElementById('hint').innerHTML =
@@ -508,13 +539,12 @@ async function start(){
       '<b style="color:var(--warn)">Mic didn’t start.</b> ' + msg;
     return;
   }
-  ac = new (window.AudioContext||window.webkitAudioContext)();
   const src = ac.createMediaStreamSource(stream);
   const an = ac.createAnalyser();
   an.fftSize = 2048; src.connect(an);
   const buf = new Float32Array(an.fftSize);
 
-  frames=[]; running=true; heard=false; t0=performance.now();
+  frames=[]; running=true; heard=false; quietRun=0; t0=performance.now();
   document.getElementById('res').classList.remove('on');
   document.getElementById('go').classList.add('rec');
   document.getElementById('go').textContent = 'Listening… hum, then swing';
@@ -529,6 +559,20 @@ async function start(){
     // to re-ask the question, and a number can't be re-measured
     frames.push(d ? {hz:d.hz, clarity:d.clarity, rms:d.rms, buf:raw} : {hz:0, buf:raw});
     document.getElementById('note').textContent = d ? d.hz.toFixed(1)+' Hz' : '—';
+
+    // level, straight off the raw buffer — independent of whether pitch detection works
+    let lv=0; for(let i=0;i<raw.length;i++) lv+=raw[i]*raw[i];
+    lv = Math.sqrt(lv/raw.length);
+    const bar = document.getElementById('lvlbar');
+    bar.style.width = Math.min(100, lv/0.15*100) + '%';
+    bar.className = d ? '' : 'hot';
+    quietRun = lv < 0.004 ? quietRun+1 : 0;
+    if(quietRun === Math.round(2500/HOP) && !heard){
+      document.getElementById('hint').innerHTML =
+        '<b style="color:var(--warn)">Not hearing anything.</b> The bar under the graph ' +
+        'should move when you hum. If it is dead, the mic isn’t reaching this page — ' +
+        'check the 🔒 in the address bar, or close other apps using the mic.';
+    }
     draw();
 
     // HANDS-FREE STOP. The real use is a phone lying in the grass next to the ball
