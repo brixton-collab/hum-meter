@@ -241,6 +241,7 @@ function draw(){
   const w=cv.clientWidth, h=cv.clientHeight;
   ctx.clearRect(0,0,w,h);
   const v = frames.filter(f=>f.hz);
+  const GUT = 40;
 
   if(v.length<2){
     ctx.strokeStyle='#182234'; ctx.lineWidth=1;
@@ -249,57 +250,80 @@ function draw(){
   }
 
   const med = median(v.map(f=>f.hz));
-  const yOf = hz => h/2 - (1200*Math.log2(hz/med))/VIEW_CENTS*(h/2);
 
-  // Semitone gridlines with note names, the way a pitch monitor draws them. The lines
-  // are what turn "a squiggle" into "you are sitting on B2" — an absolute reference the
-  // eye can judge against, instead of a shape floating in space.
+  // ── THE RANGE ──────────────────────────────────────────────────────────────
+  // The old view was fixed at +/-350 cents and CLAMPED the line to the canvas edge, so a
+  // crack that leapt an octave was drawn as a flat line pinned to the top — the single
+  // most important event in the recording, rendered invisible. Nail the Pitch shows a
+  // wide fixed piano roll precisely so a spike reads as a spike.
+  //
+  // So: keep +/-350c as the floor, because a steady hum must still read as a flat line
+  // and not be stretched to fill the box, but OPEN the view far enough to contain every
+  // excursion. Spikes are drawn in full or they are not evidence.
+  let lo=-VIEW_CENTS, hi=VIEW_CENTS;
+  v.forEach(f=>{ const c=1200*Math.log2(f.hz/med); if(c<lo) lo=c; if(c>hi) hi=c; });
+  const pad=(hi-lo)*0.08; lo-=pad; hi+=pad;
+  const yOf = hz => h - ((1200*Math.log2(hz/med))-lo)/(hi-lo)*h;
+
+  // ── THE PIANO ROLL ─────────────────────────────────────────────────────────
+  // Alternating semitone lanes with note names, the way a pitch monitor draws them. The
+  // lanes are what turn "a squiggle" into "you are sitting on B2" — an absolute
+  // reference the eye can judge, instead of a shape floating in space.
   const centre = noteOf(med);
-  ctx.font = '10px -apple-system,system-ui,sans-serif';
+  const sLo = Math.floor(lo/100)-1, sHi = Math.ceil(hi/100)+1;
+  ctx.font = '9px -apple-system,system-ui,sans-serif';
   ctx.textBaseline = 'middle';
-  for(let s=-3; s<=3; s++){
-    const hz = centre.hz*Math.pow(2, s/12);
-    const y = yOf(hz);
-    if(y<8 || y>h-8) continue;
-    const onNote = (s===0);
-    ctx.strokeStyle = onNote ? '#2c3a4e' : '#182234';
-    ctx.lineWidth = onNote ? 1.5 : 1;
-    ctx.beginPath(); ctx.moveTo(34,y); ctx.lineTo(w,y); ctx.stroke();
-    ctx.fillStyle = onNote ? '#8ea3bd' : '#3d4c60';
-    ctx.fillText(noteOf(hz).name, 4, y);
+  const dense = (sHi-sLo) > 26;                 // too many lanes to label every one
+  for(let s=sLo; s<=sHi; s++){
+    const hzTop = centre.hz*Math.pow(2,(s+0.5)/12);
+    const hzBot = centre.hz*Math.pow(2,(s-0.5)/12);
+    const yT=yOf(hzTop), yB=yOf(hzBot);
+    if(yB<0 || yT>h) continue;
+    const nm = noteOf(centre.hz*Math.pow(2,s/12));
+    const black = nm.name.includes('\u266F');
+    ctx.fillStyle = black ? 'rgba(255,255,255,.012)' : 'rgba(255,255,255,.038)';
+    ctx.fillRect(GUT, Math.max(0,yT), w-GUT, Math.min(h,yB)-Math.max(0,yT));
+    ctx.strokeStyle = (s===0) ? '#33475f' : '#141d2b';
+    ctx.lineWidth = (s===0) ? 1.4 : 1;
+    ctx.beginPath(); ctx.moveTo(GUT,yB); ctx.lineTo(w,yB); ctx.stroke();
+    const yc=(yT+yB)/2;
+    if(yc>7 && yc<h-7 && (!dense || s%2===0 || s===0)){
+      ctx.fillStyle = (s===0) ? '#9fb4cd' : '#46586e';
+      ctx.fillText(nm.name, 4, yc);
+    }
   }
 
-  ctx.lineWidth=3; ctx.lineJoin='round'; ctx.lineCap='round';
-  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--go');
+  // ── THE LINE ───────────────────────────────────────────────────────────────
+  // Thin and unsmoothed, like Nail the Pitch. A hum's jaggedness IS the measurement;
+  // a fat rounded stroke hides exactly what the score is made of.
+  const s = window.__lastScore;
+  ctx.lineWidth=1.6; ctx.lineJoin='miter'; ctx.lineCap='butt';
+  ctx.strokeStyle='#f2f6fb';
   let pen=false;
   ctx.beginPath();
-  const GUT = 34;
   frames.forEach((f,i)=>{
     const x = GUT + i/(Math.max(frames.length,1)-1)*(w-GUT);
     if(!f.hz){ pen=false; return; }
-    const y = Math.max(3, Math.min(h-3, yOf(f.hz)));
+    const y = yOf(f.hz);                       // NOT clamped — a spike must be a spike
     if(!pen){ ctx.moveTo(x,y); pen=true; } else ctx.lineTo(x,y);
   });
   ctx.stroke();
 
-  // Shade everything after the break. The score is now literally "how far did you get",
-  // so the picture should show the same thing: the bright stretch is what counted.
-  const brk0 = cracks()[0];
-  if(brk0 !== undefined){
-    const x = GUT + brk0/(Math.max(frames.length,1)-1)*(w-GUT);
-    ctx.fillStyle = 'rgba(11,15,20,.62)'; ctx.fillRect(x, 0, w-x, h);
-    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--bad');
-    ctx.lineWidth = 1; ctx.setLineDash([4,4]);
-    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]);
+  // ── THE CRACKS ─────────────────────────────────────────────────────────────
+  // Marked where they happened, in the lane where they happened, because "your hum
+  // cracked at 1.4s" is the one thing on screen a golfer can act on.
+  if(s && s.cracks && s.cracks.length){
+    const bad = getComputedStyle(document.documentElement).getPropertyValue('--bad');
+    s.cracks.forEach(c=>{
+      const fi = Math.round(c.at*1000/HOP) + (s.humStart||0);
+      const x = GUT + fi/(Math.max(frames.length,1)-1)*(w-GUT);
+      ctx.strokeStyle=bad; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle=bad; ctx.beginPath(); ctx.arc(x,10,3.5,0,7); ctx.fill();
+    });
   }
-
-  // mark the cracks in red — the single most legible thing on screen
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bad');
-  cracks().forEach(i=>{
-    const x=GUT + i/(Math.max(frames.length,1)-1)*(w-GUT);
-    ctx.beginPath(); ctx.arc(x,h/2,5,0,7); ctx.fill();
-  });
 }
+
 
 const median=a=>{ const s=[...a].sort((x,y)=>x-y); const m=s.length>>1;
   return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
@@ -475,10 +499,60 @@ function deHash(){
 // "over 75"; looser stops separating REF-1 from REF-2.
 const TOL_CENTS = 25, TREND_MS = 200, HOLD_MIN_MS = 50, GASP_CENTS = 100, GASP_GAP_MS = 250;
 
+// Brixton's rule, 2026-08-18: "if the hum cracks, the score has to be definitely below 75."
+// A CEILING, not a penalty. A hum that cracked cannot read CLEAN or ELITE however good
+// the rest of it was, because the whole game is getting through the swing WITHOUT
+// cracking. Measured against his ten graded clips this crack definition returns 0 for
+// every hum he called good and non-zero for every hum he called broken, so the cap only
+// actually bites on one of them - the rule and the metric already agreed.
+const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 50,
+      CRACK_DROP_MS = 100, CRACK_TAIL_MS = 150;
+
+// ── ISOLATE THE HUM ──────────────────────────────────────────────────────────
+// A recording is not a hum. Hold the phone through a golf swing and you capture the hum
+// plus the ball flight, the reaction, the talking. Scored end to end every second of that
+// aftermath reads as "you lost the hum" — a swing Brixton graded 63 came back 26.5.
+//
+// The hard part: a hum HAS gaps, and those gaps are the most valuable thing in it — they
+// are the breath holds. So a gap must not end the hum. But the end of the hum is also a
+// gap, and length cannot separate them (his reference hums hold 550 ms; the aftermath in
+// the swing clip starts after 160 ms). What separates them, measured across all of his
+// reference recordings:
+//
+//     a BREATH HOLD  resumes ON the note      -> within +/-40c,  62-100% on-note after
+//     the END of the hum resumes elsewhere    -> 440-728c off,    1.5-7% on-note after
+//
+// Bridge a gap when the hum comes back to the same note and stays. End it when it does not.
+const ISO_NEAR_C = 150, ISO_ON_FRAC = 0.40, ISO_MAX_GAP_MS = 1200, ISO_MIN_MS = 700;
+function isolate(fr){
+  const idx=[]; fr.forEach((f,i)=>{ if(f.hz) idx.push(i); });
+  if(idx.length<10) return [0, fr.length];
+  const centre = median(idx.map(i=>fr[i].hz));
+  const off = hz => Math.abs(1200*Math.log2(hz/centre));
+  const look = Math.round(2000/HOP), maxGap = Math.round(ISO_MAX_GAP_MS/HOP);
+  const start = idx[0]; let end = start;
+  for(let k=0;k<idx.length-1;k++){
+    const a=idx[k], b=idx[k+1];
+    if(b-a<=1){ end=b; continue; }
+    const nxt = fr.slice(b, b+look);
+    const on  = nxt.filter(f=>f.hz);
+    const resumesOnNote = on.length>=5 && median(on.slice(0,60).map(f=>off(f.hz))) <= ISO_NEAR_C;
+    const stays = nxt.length && (nxt.filter(f=>f.hz && off(f.hz)<=200).length/nxt.length) >= ISO_ON_FRAC;
+    if(b-a<=maxGap && resumesOnNote && stays){ end=b; continue; }
+    break;
+  }
+  const tail = idx.filter(i=>i>=end);
+  if(tail.length){ let j=0; while(j<tail.length-1 && tail[j+1]-tail[j]<=1) j++; end=tail[j]; }
+  if((end-start)*HOP < ISO_MIN_MS) return [0, fr.length];
+  return [start, end+1];
+}
+
 function score(){
-  const first = frames.findIndex(f=>f.hz), last = frames.length-1-[...frames].reverse().findIndex(f=>f.hz);
+  const [i0,i1] = isolate(frames);
+  const hum = frames.slice(i0,i1);
+  const first = hum.findIndex(f=>f.hz), last = hum.length-1-[...hum].reverse().findIndex(f=>f.hz);
   if(first < 0 || last-first < 20) return null;
-  const span = frames.slice(first, last+1);            // trim lead-in / tail silence
+  const span = hum.slice(first, last+1);              // trim lead-in / tail silence
   const voiced = span.map(f=>!!f.hz);
   const vh = span.filter(f=>f.hz).map(f=>f.hz);
   if(vh.length < 15) return null;
@@ -519,9 +593,31 @@ function score(){
   const n = path.length, xm = (n-1)/2, ym = path.reduce((a,b)=>a+b,0)/n;
   let num=0, den=0;
   for(let i=0;i<n;i++){ num += (i-xm)*(path[i]-ym); den += (i-xm)*(i-xm); }
+  // CRACKS: an audible break. The last 150 ms is exempt - on a swing hum that is impact,
+  // and impact is the strike, not a crack.
+  const guard = span.length - Math.round(CRACK_TAIL_MS/HOP);
+  const cracks=[];
+  for(let i=0;i<span.length;){
+    if(devSpan[i]!==null && devSpan[i]>CRACK_JUMP_C){
+      let j=i, mx=0;
+      while(j<span.length && devSpan[j]!==null && devSpan[j]>CRACK_JUMP_C){ mx=Math.max(mx,devSpan[j]); j++; }
+      if((j-i)*HOP>=CRACK_JUMP_MS && i<guard)
+        cracks.push({kind:'jump', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:Math.round(mx)});
+      i=j;
+    } else if(!voiced[i]){
+      let j=i; while(j<span.length && !voiced[j]) j++;
+      if((j-i)*HOP>=CRACK_DROP_MS && i>3 && i<guard)
+        cracks.push({kind:'drop', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:0});
+      i=j;
+    } else i++;
+  }
+  const capped = cracks.length > 0 && total > CRACK_CAP;
+  const finalTotal = cracks.length ? Math.min(total, CRACK_CAP) : total;
+
   const tilt = den ? (num/den)*(n-1) : 0;
   const clar = span.filter(f=>f.hz).reduce((s,f)=>s+f.clarity,0)/vh.length;
-  return { total: Math.round(total*10)/10, line, onAir, tension, tilt, note,
+  return { total: Math.round(finalTotal*10)/10, line, onAir, tension, tilt, note, cracks, capped,
+           humStart: i0+first, humWindow: [i0*HOP/1000, i1*HOP/1000],
            jitter: median(dev)*1.4826, held:(vh.length*HOP)/1000,
            span:(span.length*HOP)/1000, purity: clar, rough: clar < CLARITY_GATE };
 }
@@ -548,7 +644,14 @@ function verdict(s){
   // A tension event is the thing worth saying out loud: it names WHERE in the swing the
   // golfer held their breath, which is the one piece of coaching the number cannot give.
   let say;
-  if(s.tension.length){
+  if(s.cracks.length){
+    const c = s.cracks[0];
+    say = 'Your hum cracked ' + (s.cracks.length===1 ? 'once, at ' : s.cracks.length + ' times — first at ')
+        + c.at.toFixed(1) + 's. '
+        + (s.capped ? 'A hum that cracks cannot score above 75, however clean the rest was. '
+                    : '')
+        + 'The whole game is getting through the swing without it.';
+  } else if(s.tension.length){
     const t = s.tension[0];
     say = s.tension.length === 1
       ? 'You held your breath at ' + t.at.toFixed(1) + 's, then gasped the note back. '
@@ -766,9 +869,10 @@ function stop(){
   const voiced = frames.filter(f=>f.hz).map(f=>f.hz);
   if(voiced.length) resolveOctaves(confirmNoteOctave(robustNote(voiced)));
   deHash();
-  draw();
 
   const s = score();
+  window.__lastScore = s;          // draw() marks the cracks from this
+  draw();
   if(!s){ document.getElementById('hint').textContent =
     'Didn’t hear a hum. Get closer to the mic and hold one note.'; return; }
   if(s.rough){ document.getElementById('hint').textContent =
@@ -794,7 +898,9 @@ function stop(){
              : s.line>=70 ? 'Wavering' : 'All over it';
   document.getElementById('m1').textContent = word + '  ·  ' + Math.round(s.line) + '/100';
   document.getElementById('m3').textContent = (s.purity*100).toFixed(0)+'%';
-  document.getElementById('m4').textContent = s.tension.length
+  document.getElementById('m4').textContent = s.cracks.length
+    ? s.cracks.length + ' crack' + (s.cracks.length>1?'s':'') + ' · first at ' + s.cracks[0].at.toFixed(1) + 's'
+    : s.tension.length
     ? s.tension.length + ' stop' + (s.tension.length>1?'s':'') + ' · first at ' + s.tension[0].at.toFixed(1) + 's'
     : Math.round(s.onAir) + '% on · ' + s.held.toFixed(1) + 's';
   const pctBeat = beats(s.total);
@@ -813,7 +919,7 @@ function logAttempt(s, band){
   attempts.push({ score:s.total, band, note:+s.note.toFixed(1),
                   line:+s.line.toFixed(1), onAir:+s.onAir.toFixed(1),
                   jitter:+s.jitter.toFixed(1), tilt:Math.round(s.tilt),
-                  tension:s.tension.length,
+                  tension:s.tension.length, cracks:s.cracks.length, capped:s.capped,
                   tensionAt:s.tension.map(t=>+t.at.toFixed(2)),
                   held:+s.held.toFixed(1), span:+s.span.toFixed(1),
                   clarity:+s.purity.toFixed(2) });
@@ -826,7 +932,7 @@ try{ attempts = JSON.parse(localStorage.getItem('humAttempts')||'[]'); }catch(e)
 document.getElementById('dcopy').onclick = async () => {
   const txt = 'HUM METER — ' + attempts.length + ' attempts (steadiness = % of span on your own line, tol '
     + TOL_CENTS + 'c)\n'
-    + attempts.map(a=>`score ${a.score} ${a.band} | note ${a.note}Hz | line ${a.line} | onAir ${a.onAir} | jitter ${a.jitter}c | tilt ${a.tilt}c | tension ${a.tension} @${JSON.stringify(a.tensionAt)} | span ${a.span}s | clarity ${a.clarity}`).join('\n');
+    + attempts.map(a=>`score ${a.score} ${a.band} | note ${a.note}Hz | line ${a.line} | onAir ${a.onAir} | jitter ${a.jitter}c | tilt ${a.tilt}c | cracks ${a.cracks}${a.capped?' (CAPPED)':''} | tension ${a.tension} @${JSON.stringify(a.tensionAt)} | span ${a.span}s | clarity ${a.clarity}`).join('\n');
   const b = document.getElementById('dcopy');
   try{ await navigator.clipboard.writeText(txt); b.textContent='Copied — paste it to Harry'; }
   catch(e){ b.textContent='Copy failed — screenshot this instead'; console.log(txt); }
@@ -872,19 +978,22 @@ function drawCard(s, bandName, colVar, pctBeat){
     frames.forEach((f,i)=>{
       const x = px + i/(Math.max(frames.length,1)-1)*pw;
       if(!f.hz){ pen=false; return; }
-      const y = Math.max(py+5, Math.min(py+ph-5,
-        py + ph/2 - (1200*Math.log2(f.hz/med))/SPAN*(ph/2)));
+      // Not clamped: a crack that leaps an octave has to LOOK like it did.
+      const y = py + ph/2 - (1200*Math.log2(f.hz/med))/SPAN*(ph/2);
       if(!pen){ g.moveTo(x,y); pen=true; } else g.lineTo(x,y);
     });
     g.stroke();
     g.fillStyle = css('--bad');
-    cracks().forEach(i=>{ const x = px + i/(Math.max(frames.length,1)-1)*pw;
+    (s.cracks||[]).forEach(c=>{
+      const fi = Math.round(c.at*1000/HOP) + (s.humStart||0);
+      const x = px + fi/(Math.max(frames.length,1)-1)*pw;
       g.beginPath(); g.arc(x, py+ph/2, 11, 0, 7); g.fill(); });
   }
 
   g.fillStyle='#8ea3bd'; g.font='500 34px -apple-system,Inter,system-ui,sans-serif';
   g.fillText(s.note.toFixed(0)+' Hz   ·   ±'+s.jitter.toFixed(0)+' cents   ·   '
-    + (s.tension.length ? s.tension.length + ' stop' + (s.tension.length>1?'s':'')
+    + (s.cracks.length ? s.cracks.length + ' crack' + (s.cracks.length>1?'s':'')
+       : s.tension.length ? s.tension.length + ' stop' + (s.tension.length>1?'s':'')
                         : Math.round(s.onAir) + '% on the note'),
     W/2, py+ph+80);
 
