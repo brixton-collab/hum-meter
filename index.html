@@ -261,7 +261,8 @@ function draw(){
   // and not be stretched to fill the box, but OPEN the view far enough to contain every
   // excursion. Spikes are drawn in full or they are not evidence.
   let lo=-VIEW_CENTS, hi=VIEW_CENTS;
-  v.forEach(f=>{ const c=1200*Math.log2(f.hz/med); if(c<lo) lo=c; if(c>hi) hi=c; });
+  frames.forEach(f=>{ const hz = f.drawHz!==undefined ? f.drawHz : f.hz; if(!hz) return;
+    const c=1200*Math.log2(hz/med); if(c<lo) lo=c; if(c>hi) hi=c; });
   const pad=(hi-lo)*0.08; lo-=pad; hi+=pad;
   const yOf = hz => h - ((1200*Math.log2(hz/med))-lo)/(hi-lo)*h;
 
@@ -294,17 +295,33 @@ function draw(){
   }
 
   // ── THE LINE ───────────────────────────────────────────────────────────────
-  // Thin and unsmoothed, like Nail the Pitch. A hum's jaggedness IS the measurement;
-  // a fat rounded stroke hides exactly what the score is made of.
+  //
+  // Drawn from the RAW track — before octave correction, before the de-hash median.
+  // That is deliberate, and it is the thing Brixton asked for: "when I make a perfectly
+  // steady hum the line stays perfect. When I don't, you can see it CRACKS."
+  //
+  // The subtlety worth keeping straight: when a hum cracks, the voice goes breathy and
+  // unstable and the pitch tracker loses the fundamental and grabs the SUBHARMONIC. So
+  // the octave-down spike is an artifact in its DEPTH but not in its LOCATION - it marks
+  // a real moment where the note was lost. Suppressing it would delete the evidence.
+  //
+  // So the two are split, and this is the whole design:
+  //     the LINE  is raw     - every spike drawn, at full depth, nothing smoothed
+  //     the SCORE is guarded - a tracking artifact is not charged against you twice
+  //
+  // Thin, mitred, unsmoothed. A hum's jaggedness IS the measurement; a fat rounded
+  // stroke hides exactly what the number is made of.
   const s = window.__lastScore;
-  ctx.lineWidth=1.6; ctx.lineJoin='miter'; ctx.lineCap='butt';
+  const hzOf = f => f.drawHz !== undefined ? f.drawHz : f.hz;
+  ctx.lineWidth=1.5; ctx.lineJoin='miter'; ctx.lineCap='butt';
   ctx.strokeStyle='#f2f6fb';
   let pen=false;
   ctx.beginPath();
   frames.forEach((f,i)=>{
     const x = GUT + i/(Math.max(frames.length,1)-1)*(w-GUT);
-    if(!f.hz){ pen=false; return; }
-    const y = yOf(f.hz);                       // NOT clamped — a spike must be a spike
+    const hz = hzOf(f);
+    if(!hz){ pen=false; return; }
+    const y = yOf(hz);                         // NOT clamped — a spike must be a spike
     if(!pen){ ctx.moveTo(x,y); pen=true; } else ctx.lineTo(x,y);
   });
   ctx.stroke();
@@ -317,9 +334,10 @@ function draw(){
     s.cracks.forEach(c=>{
       const fi = Math.round(c.at*1000/HOP) + (s.humStart||0);
       const x = GUT + fi/(Math.max(frames.length,1)-1)*(w-GUT);
-      ctx.strokeStyle=bad; ctx.lineWidth=1; ctx.setLineDash([3,3]);
-      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle=bad; ctx.beginPath(); ctx.arc(x,10,3.5,0,7); ctx.fill();
+      ctx.strokeStyle=bad; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+      ctx.fillStyle=bad; ctx.beginPath();
+      ctx.moveTo(x-4.5,1); ctx.lineTo(x+4.5,1); ctx.lineTo(x,9); ctx.closePath(); ctx.fill();
     });
   }
 }
@@ -867,7 +885,24 @@ function stop(){
   // settle the octave before anything is measured — everything below is in cents off
   // the note, so a frame on the subharmonic doesn't add noise, it adds 1200 cents of it
   const voiced = frames.filter(f=>f.hz).map(f=>f.hz);
+  // THE LINE vs THE SCORE — the one design decision that makes this picture honest.
+  //
+  // Brixton: "when I make a perfectly steady hum the line stays perfect. When I don't,
+  // you can see it CRACKS. I want to show the jagged lines so people can see the spike."
+  //
+  // Both halves of that matter, and they pull against each other. Drawing the RAW track
+  // (what Nail the Pitch does) gives the drama — but on a swing hum 100% of its deep
+  // down-spikes land within 80 cents of EXACTLY an octave below the note, because when a
+  // voice goes breathy the tracker loses the fundamental and grabs the subharmonic. It
+  // does that on a PERFECT hum too: his own straight-line reference, which he graded
+  // "high 90s", picks up a fake half-second plunge to C#2. Draw raw and his perfect hum
+  // is drawn cracked. That breaks the first thing he asked for.
+  //
+  // So: correct the octave (a perfect hum draws perfect), but DO NOT smooth (jaggedness
+  // is the measurement), and mark the cracks from the SCORER, which is octave-guarded and
+  // returns zero on his perfect hum. The drama comes from real cracks, not from artifacts.
   if(voiced.length) resolveOctaves(confirmNoteOctave(robustNote(voiced)));
+  frames.forEach(f => { f.drawHz = f.hz; });      // corrected, but NOT de-hashed
   deHash();
 
   const s = score();
