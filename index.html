@@ -117,20 +117,26 @@
     </div>
     <table>
       <tr><td>Your note</td><td id="m0">—</td></tr>
-      <tr><td>Steadiness</td><td id="m1">—</td></tr>
-      <tr><td>Tone purity</td><td id="m3">—</td></tr>
-      <tr><td>Held</td><td id="m4">—</td></tr>
-      <tr id="impactRow" style="display:none"><td>Through the ball</td><td>—</td></tr>
+      <!-- Deliberately only three rows. "Tone purity" measured the microphone more than
+           the voice and meant nothing to a golfer, and a separate "Steadiness 91/100"
+           next to a score of 68 reads as a contradiction - they are different questions
+           and nobody should have to know that. The score IS the steadiness. -->
+      <tr><td>Where it cracked</td><td id="m1">—</td></tr>
+      <tr><td>Through the ball</td><td id="m4">—</td></tr>
+
     </table>
 
     <!-- The ask. It goes AFTER the score, never before: they have something of their
          own now, so posting it is showing off rather than doing him a favour. -->
     <div id="cta" style="display:none;margin:16px 0;padding:14px;border-radius:12px;
          background:#12241c;border:1px solid #1e4436">
-      <b style="color:#3ef2a0">Post your score and tag @brixton_pg</b>
-      <div style="opacity:.85;font-size:14px;margin-top:4px">
-        I’m collecting hums from golfers everywhere — the steadiest one I see each week
-        gets a full swing breakdown from me.
+      <!-- A bare "tag me" asks them for a favour. A challenge with a payoff gives them
+           a reason: something to beat, and something they get back. The score they are
+           looking at IS the hook - they earned it ten seconds ago. -->
+      <b style="color:#3ef2a0">Think you can beat that?</b>
+      <div style="opacity:.88;font-size:14px;margin-top:4px">
+        Screenshot it and tag <b>@brixton_pg</b>. Every week I take the most interesting
+        hum I'm sent and break the whole swing down on camera.
       </div>
     </div>
 
@@ -738,7 +744,10 @@ function score(){
   const finalTotal = cracks.length ? total * (CRACK_CAP/100) : total;
 
   const tilt = den ? (num/den)*(n-1) : 0;
-  const clar = span.filter(f=>f.hz).reduce((s,f)=>s+f.clarity,0)/vh.length;
+  // (f.clarity||0): deHash can turn a previously-unvoiced frame voiced, and those frames
+  // were pushed without a clarity value. One undefined turns the whole average into NaN,
+  // which is what put "NaN" on screen where a percentage should be.
+  const clar = span.filter(f=>f.hz).reduce((s,f)=>s+(f.clarity||0),0)/Math.max(vh.length,1);
   return { total: Math.round(finalTotal*10)/10, line, onAir, tension, tilt, note, cracks, capped,
            humStart: i0+first, humWindow: [i0*HOP/1000, i1*HOP/1000],
            jitter: median(dev)*1.4826, held:(vh.length*HOP)/1000,
@@ -759,41 +768,68 @@ function beats(total){
 // There is no CRACKED band any more, on purpose. A break is now a NUMBER — it moves
 // the score in proportion to how far you got — so the band it lands in is the honest
 // answer, and the sentence underneath says where it went instead of just "broken".
+/* ── WHAT IT SAYS BACK ────────────────────────────────────────────────────────
+   One sentence, and it has to do three things: name what happened, say where, and
+   give them the next rep. Rewritten 2026-08-18 after Brixton read the old copy:
+   "just make the wording a little bit better - your hum cracked ONE TIME at THIS
+   MARK, your goal is to keep a steady hum throughout the entire swing."
+
+   Priority order matters. A hum that stopped at the ball is a more useful thing to
+   be told than a band, and a crack is more useful than a wobble - so the specific
+   failure always wins over the generic grade.                                     */
 function verdict(s){
   const col = s.total>=CAL.bands.ELITE ? ['ELITE','var(--go)']
             : s.total>=CAL.bands.CLEAN ? ['CLEAN','var(--ok)']
             : s.total>=CAL.bands.SHAKY ? ['SHAKY','var(--warn)']
             : ['NEEDS WORK','var(--bad)'];
-  // A tension event is the thing worth saying out loud: it names WHERE in the swing the
-  // golfer held their breath, which is the one piece of coaching the number cannot give.
+
+  const GOAL = 'Your goal is one steady hum through the whole swing.';
+  const where = c => {
+    if(!s.impact) return 'at ' + c.at.toFixed(1) + 's';
+    const d = c.at - s.impact.frame*HOP/1000;
+    return Math.abs(d) < 0.08 ? 'right at the ball'
+         : Math.abs(d).toFixed(1) + 's ' + (d<0 ? 'before' : 'after') + ' you hit it';
+  };
+
   let say;
-  if(s.cracks.length){
-    const c = s.cracks[0];
-    say = 'Your hum cracked ' + (s.cracks.length===1 ? 'once, at ' : s.cracks.length + ' times — first at ')
-        + c.at.toFixed(1) + 's. '
-        + (s.capped ? 'A hum that cracks cannot score above 75, however clean the rest was. '
-                    : '')
-        + 'The whole game is getting through the swing without it.';
-  } else if(s.tension.length){
-    const t = s.tension[0];
-    say = s.tension.length === 1
-      ? 'You held your breath at ' + t.at.toFixed(1) + 's, then gasped the note back. '
-        + 'That is where your tension is.'
-      : 'The hum stopped ' + s.tension.length + ' times — first at ' + t.at.toFixed(1)
-        + 's. Each stop is a place you are holding tension.';
-  } else if(s.onAir < 95){
-    say = 'The hum dropped out for ' + Math.round(100-s.onAir) + '% of the way. '
-        + 'Keep the sound going the whole time.';
-  } else {
-    say = s.total>=CAL.bands.ELITE ? 'One clean line the whole way. Almost nobody does that.'
-        : s.total>=CAL.bands.CLEAN ? 'One line the whole way. Solid.'
-        : s.total>=CAL.bands.SHAKY ? 'It stayed on, but the line audibly wavers.'
-        : 'It never settled into a line. Keep the sound in one place.';
+
+  // 1. the hum stopped at the strike — the most diagnostic thing that can happen
+  if(s.through && s.through.restrictedAt){
+    say = 'Your hum stopped right at the ball. That is where you tightened up — the sound '
+        + 'is the first thing to go when you grip harder. ' + GOAL;
   }
+  // 2. it cracked
+  else if(s.cracks.length === 1){
+    say = 'Your hum cracked one time, ' + where(s.cracks[0]) + '. '
+        + 'A hum that cracks cannot score above 75, however clean the rest of it was. ' + GOAL;
+  }
+  else if(s.cracks.length > 1){
+    say = 'Your hum cracked ' + s.cracks.length + ' times — the first ' + where(s.cracks[0]) + '. '
+        + 'A hum that cracks cannot score above 75. ' + GOAL;
+  }
+  // 3. it never cracked, so grade the line itself
+  else if(s.total >= CAL.bands.ELITE){
+    say = (s.through && s.through.survived)
+      ? 'Rock steady, and you carried it straight through the ball. Almost nobody does that.'
+      : 'Rock steady — one line, the whole way through. Almost nobody does that.';
+  }
+  else if(s.total >= CAL.bands.CLEAN){
+    say = 'Solid. You stayed on one note the whole way and never broke it. '
+        + 'Take the wobble out and this is an elite hum.';
+  }
+  else if(s.total >= CAL.bands.SHAKY){
+    say = 'Your note kept moving. It never broke — it just wandered. '
+        + 'Pick one note and hold THAT note, all the way through.';
+  }
+  else {
+    say = 'Your hum never settled on a note. Pick one and keep it in the same place — '
+        + 'steady beats loud.';
+  }
+
   // Reported, never scored: a straight line that tilts is still a straight line.
-  if(Math.abs(s.tilt) > 80)
-    say += ' Your note ' + (s.tilt>0?'rose ':'fell ') + Math.abs(Math.round(s.tilt))
-         + ' cents as you went — smooth, but it travelled.';
+  if(!s.cracks.length && Math.abs(s.tilt) > 120)
+    say += ' Your note also ' + (s.tilt>0?'climbed':'dropped') + ' as you went — smooth, but it travelled.';
+
   return [col[0], col[1], say];
 }
 
@@ -1072,10 +1108,9 @@ function stop(){
   // which is whether the note was held.
   document.getElementById('m0').textContent =
     noteOf(s.note).name + '  ·  ' + s.note.toFixed(0) + ' Hz';
-  const word = s.line>=95 ? 'Rock steady' : s.line>=85 ? 'Steady'
-             : s.line>=70 ? 'Wavering' : 'All over it';
-  document.getElementById('m1').textContent = word + '  ·  ' + Math.round(s.line) + '/100';
-  document.getElementById('m3').textContent = (s.purity*100).toFixed(0)+'%';
+  document.getElementById('m1').innerHTML = s.cracks.length
+    ? '<b style="color:var(--bad)">' + s.cracks.map(c=>c.at.toFixed(1)+'s').join(', ') + '</b>'
+    : '<b style="color:var(--go)">never cracked ✓</b>';
   document.getElementById('m4').textContent = s.cracks.length
     ? s.cracks.length + ' crack' + (s.cracks.length>1?'s':'') + ' · first at ' + s.cracks[0].at.toFixed(1) + 's'
     : s.tension.length
@@ -1122,12 +1157,19 @@ function stop(){
   s.impact=impact; s.through=through;
   window.__lastScore=s; draw();
 
-  const im=document.getElementById('impactRow');
-  if(im){
-    im.style.display = through ? '' : 'none';
-    if(through) im.querySelector('td:last-child').innerHTML = through.survived
-      ? '<b style="color:var(--go)">held it through ✓</b>'
-      : '<b style="color:var(--bad)">stopped at the ball</b>';
+  const m4=document.getElementById('m4');
+  if(m4) m4.innerHTML = !through ? 'no strike heard'
+    : through.survived ? '<b style="color:var(--go)">held it through ✓</b>'
+                       : '<b style="color:var(--bad)">stopped at the ball</b>';
+  // With the ball located, a crack time becomes a coaching instruction rather than a
+  // stopwatch reading: "0.4s BEFORE you hit it" beats "at 1.8s" every time.
+  if(impact && s.cracks.length){
+    const t0i = impact.frame*HOP/1000;
+    document.getElementById('m1').innerHTML = '<b style="color:var(--bad)">' +
+      s.cracks.map(c=>{ const d=c.at-t0i;
+        return Math.abs(d)<0.08 ? 'at the ball'
+             : (Math.abs(d).toFixed(1)+'s '+(d<0?'before':'after')+' the ball'); }).join(', ')
+      + '</b>';
   }
   if(through && through.restrictedAt)
     document.getElementById('sy').textContent =
