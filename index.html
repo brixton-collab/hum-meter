@@ -148,15 +148,16 @@ const HUSH_MS = 900;                  // silence this long after a hum = you're 
 // fatal — two people humming identically would get different numbers, and the meter
 // would be grading their hardware. Pitch survives all of that, and "can you hold ONE
 // note" is the question the whole thing is actually about.
-// Cross-checked by running these same 14 hums through THIS file's detector: it measures
-// wobble p10/p90 at 10.8/25.3 against the desktop's 12.0/26.0, and picks the identical
-// octave on all fourteen. Two independent implementations, same answers.
+// RECALIBRATED 8/18, AFTER de-hashing. The scales moved (wobble p10/p90 11.97/26.04 ->
+// 8.24/19.55) because removing estimator hash removed ~4 cents of fake wobble from every
+// hum in the population. Scores had to be re-anchored or the meter would have called
+// half of everything ELITE. His own "great example" clip lands at 100 under this.
 const CAL = {
-  "n": 14, "n_clean": 12,
-  "weights": { "wobble": 55, "drift": 25, "cracks": 20 },
-  "scales":  { "wobble": [11.97, 26.04], "drift": [17.02, 98.6] },
-  "bands":   { "ELITE": 82.0, "CLEAN": 48.0, "SHAKY": 38.0 },
-  "percentiles": {"5":25.7,"10":31.5,"25":41.9,"50":59.2,"75":77.0,"90":90.7,"95":93.4}
+  "n": 14, "n_clean": 13,
+  "weights": {"wobble": 55, "drift": 25, "cracks": 20},
+  "scales":  { "wobble": [8.24, 19.55], "drift": [22.6, 84.57] },
+  "bands":   {"ELITE": 88.4, "CLEAN": 53.8, "SHAKY": 37.2},
+  "percentiles": {"5": 26.6, "10": 32.6, "25": 45, "50": 58.3, "75": 80.3, "90": 94.9, "95": 96.9}
 };
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -376,6 +377,28 @@ function band(v,best,worst,pts){
   if(v<=best) return pts;
   if(v>=worst) return 0;
   return pts*(1-(v-best)/(worst-best));
+}
+
+// De-hash the pitch track: a 3-frame median.
+//
+// A voice cannot change pitch in 40 milliseconds. Measured across his 14 hums, 55-90%
+// of the frame-to-frame movement in the trace was exactly that: zig-zag between
+// adjacent frames, physically impossible to sing, and therefore the estimator talking
+// about itself. On the flattest hum on record it was 8.4 of the 9.4 cents.
+//
+// It was being drawn as a jagged line AND charged to him as wobble, which is why a hum
+// that looked perfect on a real pitch monitor came back here looking hairy and scoring
+// lower than it deserved. Same defect, both complaints.
+//
+// A 3-frame median spans 120ms: it erases single-frame spikes and leaves anything
+// lasting two frames or more untouched — which is deliberately the same threshold the
+// crack detector uses, so a real break still survives to be counted as one.
+function deHash(){
+  const raw = frames.map(f=>f.hz);
+  for(let i=0;i<frames.length;i++){
+    const w=[raw[i-1],raw[i],raw[i+1]].filter(x=>x>0).sort((a,b)=>a-b);
+    if(w.length) frames[i].hz = w[w.length>>1];
+  }
 }
 
 function score(){
@@ -609,6 +632,7 @@ function stop(){
   // the note, so a frame on the subharmonic doesn't add noise, it adds 1200 cents of it
   const voiced = frames.filter(f=>f.hz).map(f=>f.hz);
   if(voiced.length) resolveOctaves(confirmNoteOctave(robustNote(voiced)));
+  deHash();
   draw();
 
   const s = score();
