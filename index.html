@@ -99,11 +99,9 @@
     </div>
     <table>
       <tr><td>Your note</td><td id="m0">—</td></tr>
-      <tr><td>Wobble</td><td id="m1">—</td></tr>
-      <tr><td>Drift</td><td id="m2">—</td></tr>
+      <tr><td>Steadiness</td><td id="m1">—</td></tr>
       <tr><td>Tone purity</td><td id="m3">—</td></tr>
       <tr><td>Cracks</td><td id="m4">—</td></tr>
-      <tr><td>Held for</td><td id="m5">—</td></tr>
     </table>
 
     <p class="cardhint">Screenshot this to share it 👇</p>
@@ -626,12 +624,23 @@ function stop(){
   document.getElementById('bd').textContent = bd;
   document.getElementById('bd').style.color = col;
   document.getElementById('sy').textContent = say;
-  document.getElementById('m0').textContent = s.note.toFixed(1)+' Hz';
-  document.getElementById('m1').textContent = '±'+s.wobble.toFixed(1)+' cents';
-  document.getElementById('m2').textContent = s.drift.toFixed(1)+' cents';
+  // ONE number, not two.
+  //
+  // "Wobble" and "drift" are what the score is actually made of, but they are engineer
+  // words: a golfer reading "drift 41 cents" on a phone learns nothing, and a row that
+  // needs explaining costs more trust than it earns. They still drive the score exactly
+  // as before — they are simply added up and shown as the thing they jointly measure,
+  // which is whether the note was held.
+  document.getElementById('m0').textContent =
+    noteOf(s.note).name + '  ·  ' + s.note.toFixed(0) + ' Hz';
+  const steadyPts = band(s.wobble, CAL.scales.wobble[0], CAL.scales.wobble[1], CAL.weights.wobble)
+                  + band(s.drift,  CAL.scales.drift[0],  CAL.scales.drift[1],  CAL.weights.drift);
+  const steadyPct = Math.round(steadyPts / (CAL.weights.wobble + CAL.weights.drift) * 100);
+  const word = steadyPct>=85 ? 'Rock steady' : steadyPct>=65 ? 'Steady'
+             : steadyPct>=40 ? 'Wavering' : 'All over it';
+  document.getElementById('m1').textContent = word + '  ·  ' + steadyPct + '/100';
   document.getElementById('m3').textContent = (s.purity*100).toFixed(0)+'%';
   document.getElementById('m4').textContent = s.cracks ? s.cracks+' break(s)' : 'none';
-  document.getElementById('m5').textContent = s.held.toFixed(1)+' s';
   const pctBeat = beats(s.total);
   document.getElementById('sy').textContent =
     say + (pctBeat ? '  ·  Better than ' + pctBeat + '% of hums measured.' : '');
