@@ -104,6 +104,17 @@
       <tr><td>Held</td><td id="m4">—</td></tr>
     </table>
 
+    <!-- The ask. It goes AFTER the score, never before: they have something of their
+         own now, so posting it is showing off rather than doing him a favour. -->
+    <div id="cta" style="display:none;margin:16px 0;padding:14px;border-radius:12px;
+         background:#12241c;border:1px solid #1e4436">
+      <b style="color:#3ef2a0">Post your score and tag @brixton_pg</b>
+      <div style="opacity:.85;font-size:14px;margin-top:4px">
+        I’m collecting hums from golfers everywhere — the steadiest one I see each week
+        gets a full swing breakdown from me.
+      </div>
+    </div>
+
     <p class="cardhint">Screenshot this to share it 👇</p>
     <canvas id="card"></canvas>
 
@@ -181,7 +192,7 @@ const CAL = {
 };
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0;
+let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0, rumbleTrack = [];
 
 function fit(){ const r = cv.getBoundingClientRect(), d = devicePixelRatio||1;
   cv.width = r.width*d; cv.height = r.height*d; ctx.setTransform(d,0,0,d,0,0); draw(); }
@@ -229,6 +240,43 @@ function detect(buf, sr, floor){
 // 350 cents each way is three semitones: wide enough that holding a note reads as
 // holding a note, tight enough that losing it is unmissable.
 const VIEW_CENTS = 350;
+
+/* ── USAGE LOGGING ────────────────────────────────────────────────────────────
+   Fill this in and every hum this page scores is written to a table you can query.
+   Leave it blank and the page works exactly the same, it is simply blind.
+
+   It is here rather than in a separate analytics tool on purpose: the useful number
+   is not "how many visits", it is the SCORES. A hundred people a day humming into
+   this is the calibration population, and it is the same table the V2 board uses -
+   so nothing recorded from day one is wasted when the board goes live.
+   Setup is ~10 minutes: see SETUP-CLOUD.md.                                       */
+const CLOUD = { url:'', key:'', table:'hums' };
+const cloudOn = () => !!(CLOUD.url && CLOUD.key);
+const VISITOR = (()=>{ try{
+  let v=localStorage.getItem('humVisitor');
+  if(!v){ v = Math.random().toString(36).slice(2)+Date.now().toString(36);
+          localStorage.setItem('humVisitor', v); }
+  return v; }catch(e){ return 'anon'; } })();
+
+function logHum(s, band){
+  if(!cloudOn()) return;
+  try{
+    fetch(CLOUD.url+'/'+CLOUD.table, {method:'POST', keepalive:true,
+      headers:{'Content-Type':'application/json', apikey:CLOUD.key,
+               Authorization:'Bearer '+CLOUD.key, Prefer:'return=minimal'},
+      body: JSON.stringify({
+        hum_id: Math.random().toString(36).slice(2)+Date.now().toString(36),
+        player_id: VISITOR, name: null, at: new Date().toISOString(),
+        score: +s.total.toFixed(1), band,
+        line: +s.line.toFixed(1), on_air: +s.onAir.toFixed(1),
+        note_hz: +s.note.toFixed(1), note_name: noteOf(s.note).name,
+        jitter: +s.jitter.toFixed(1), tilt: Math.round(s.tilt),
+        cracks: s.cracks.length, tension: s.tension.length,
+        through_impact: null, span_s: +s.span.toFixed(2), strike: null,
+        source: 'v1'
+      })}).catch(()=>{});
+  }catch(e){}
+}
 
 const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
 function noteOf(hz){
@@ -847,7 +895,7 @@ async function start(){
   an.fftSize = 2048; src.connect(hp); hp.connect(lp); lp.connect(an);
   const buf = new Float32Array(an.fftSize);
 
-  frames=[]; running=true; heard=false; quietRun=0; t0=performance.now();
+  frames=[]; running=true; heard=false; quietRun=0; rumbleTrack=[]; t0=performance.now();
   document.getElementById('res').classList.remove('on');
   document.getElementById('go').classList.add('rec');
   document.getElementById('go').textContent = 'Listening… hum, then swing';
@@ -866,6 +914,15 @@ async function start(){
     // level, straight off the raw buffer — independent of whether pitch detection works
     let lv=0; for(let i=0;i<raw.length;i++) lv+=raw[i]*raw[i];
     lv = Math.sqrt(lv/raw.length);
+
+    // RUMBLE. Wind is overwhelmingly sub-100 Hz energy; a hum is not. A one-pole
+    // low-pass at ~100 Hz and a ratio of energies is enough to tell them apart, and it
+    // costs nothing — no FFT, no second analyser node.
+    { const dt=1/ac.sampleRate, rc=1/(2*Math.PI*100), a=dt/(rc+dt);
+      let y=0, lo=0;
+      for(let i=0;i<raw.length;i++){ y += a*(raw[i]-y); lo += y*y; }
+      lo = Math.sqrt(lo/raw.length);
+      rumbleTrack.push(lv>1e-6 ? lo/lv : 0); }
     const bar = document.getElementById('lvlbar');
     bar.style.width = Math.min(100, lv/0.15*100) + '%';
     bar.className = d ? '' : 'hot';
@@ -938,8 +995,28 @@ function stop(){
   draw();
   if(!s){ document.getElementById('hint').textContent =
     'Didn’t hear a hum. Get closer to the mic and hold one note.'; return; }
-  if(s.rough){ document.getElementById('hint').textContent =
-    'Too much background noise to score that fairly. Somewhere quieter, phone closer.';
+  /* ── THE WIND GATE ──────────────────────────────────────────────────────────
+     REFUSE, don't guess. This page is about to be handed to strangers standing on
+     a driving range, and one of Brixton's own range clips found ZERO hums until it
+     was high-passed. A wrong score loses that person permanently; "I couldn't hear
+     that one fairly" costs nothing and reads as honest.
+
+     Three checks, because wind fails three different ways and rarely trips only one:
+       CLARITY  - the detector's own confidence. Wind makes it guess.
+       VOICED % - wind masks the fundamental, so frames stop resolving at all.
+       RUMBLE   - sub-100 Hz energy, which is wind and is not a hum.               */
+  const voicedPct = frames.length ? frames.filter(f=>f.hz).length/frames.length : 0;
+  const rumble = rumbleTrack.length
+    ? rumbleTrack.reduce((a,b)=>a+b,0)/rumbleTrack.length : 0;
+  const windy = rumble > 0.55, thin = voicedPct < 0.45;
+  if(s.rough || windy || thin){
+    document.getElementById('hint').innerHTML =
+      '<b style="color:var(--warn)">⚠️ Couldn’t hear that one fairly — go again.</b> ' +
+      (windy ? 'Too much wind on the mic. Turn out of the wind, or cup a hand around the phone.'
+       : thin ? 'I kept losing your note. Hold ONE note and keep it going.'
+       : 'Too much background noise. Somewhere quieter, phone closer.') +
+      '<br><span style="opacity:.7">I’d rather give you nothing than a wrong number.</span>';
+    document.getElementById('res').classList.remove('on');
     return; }
 
   const [bd,col,say] = verdict(s);
@@ -971,6 +1048,9 @@ function stop(){
     say + (pctBeat ? '  ·  Better than ' + pctBeat + '% of hums measured.' : '');
   drawCard(s, bd, col, pctBeat);
   logAttempt(s, bd);
+  logHum(s, bd);          // usage + the scores, if CLOUD is configured
+  const cta = document.getElementById('cta');
+  if(cta) cta.style.display = '';
   document.getElementById('res').classList.add('on');
 }
 
