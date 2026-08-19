@@ -671,11 +671,49 @@ function buildStrike(){
       if(pendingHum){
         pendingHum.strike=i; Store.patch(pendingHum.hum_id,{strike:i}).then(paintMe);
         const d=document.getElementById('strikeDone');
-        d.style.display=''; d.textContent='Logged.';
+        d.style.display=''; d.innerHTML = strikeInsight(i);
       }
     };
     wrap.appendChild(b);
   }
+}
+
+/* ── WHAT TO SAY BACK WHEN THEY RATE A STRIKE ────────────────────────────────
+   "Logged." is a receipt, not an answer. The pairing they just handed over - this hum
+   score with this strike - IS the product thesis, so the moment they complete it is the
+   one moment they are owed something in return.
+
+   Three cases, in order of how much data exists:
+     · not enough yet  -> tell them exactly how many more it takes. A countdown is a
+                          reason to hum again; "logged" is a full stop.
+     · enough          -> compare THIS pairing to their own pattern, in their numbers.
+     · a mismatch      -> say so. A 95 hum that produced a 3 strike is the most
+                          interesting thing that can happen and it should not be swallowed.       */
+function strikeInsight(strike){
+  const rated = Store.mine().filter(r=>r.strike!=null);
+  const NEED = 5;
+  if(rated.length < NEED){
+    const left = NEED - rated.length;
+    return 'Logged. <b>' + left + ' more rated shot' + (left>1?'s':'') +
+           '</b> and I can show you which hum score your best strikes come from.';
+  }
+  const good = rated.filter(r=>r.strike>=7), bad = rated.filter(r=>r.strike<=4);
+  const avg = a => a.reduce((s,r)=>s+r.score,0)/a.length;
+  const s = window.__lastScore ? window.__lastScore.total : null;
+  if(good.length>=3 && bad.length>=2){
+    const g = avg(good), b = avg(bad);
+    if(g - b >= 6)
+      return 'Logged. <b>Your good strikes average a ' + g.toFixed(0) + ' hum, your bad ones ' +
+             b.toFixed(0) + '.</b> ' + (s!=null && s>=g ? 'That one was in the good range.'
+                                                        : 'That one was below your good range.');
+    return 'Logged. So far your hum score and your strikes are <b>not moving together</b> — ' +
+           'good strikes average ' + g.toFixed(0) + ', bad ones ' + b.toFixed(0) + '.';
+  }
+  if(s!=null && s>=85 && strike<=4)
+    return 'Logged. <b>An elite hum and a poor strike.</b> Worth remembering — that one is unusual.';
+  if(s!=null && s<60 && strike>=8)
+    return 'Logged. <b>You flushed it on a broken hum.</b> Also unusual.';
+  return 'Logged. Keep rating them — the pattern needs both halves.';
 }
 
 /* ── MY BOARD ─────────────────────────────────────────────────────────────── */
