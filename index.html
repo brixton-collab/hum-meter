@@ -1469,7 +1469,10 @@ async function start(){
     /* Display only - see the retune note below for why `hz` is never touched live. */
     { const recent = frames.slice(-50).filter(f=>f.hz).map(f=>f.hz);
       if(recent.length >= 10){ const r = anchorNote(recent); if(r) refNote = r; }
-      if(refNote) for(const fr of frames) fr.drawHz = foldOctave(fr.hz, refNote); }
+      if(refNote) for(const fr of frames){        // display only - see the board for why
+        const h = foldOctave(fr.hz, refNote);
+        fr.drawHz = (h && Math.abs(1200*Math.log2(h/refNote)) > 500) ? 0 : h;
+      } }
 
     /* THE SECOND PASS, LIVE. The fixed 90-300 Hz band is all that can be done before the
        note is known; the moment it IS known, tighten around it. That is the pass that
@@ -1541,16 +1544,55 @@ async function start(){
          whole window and the recording never ends. The golfer stands there waiting for
          a score that is not coming, which is the exact thing Brixton hit: "if the hum
          finishes, you gotta show the score." Nine frames in ten silent IS silence. */
-      /* ⚠️ HUSH ON LEVEL, NOT ON PITCH. In a car the pitch track is simply wrong about
-         whether he has stopped - most frames read unvoiced while he is still humming.
-         "All frames unvoiced" then never fires; "90% unvoiced" fires WHILE HE IS STILL
-         HUMMING and cuts the recording to a couple of seconds. Whether a voice is
-         present is a question about level, and the level is read after the filter, so
-         road noise is not in it. The floor is relative to how loud HE was. */
+      /* ⚠️ THE QUIET FLOOR IS SET BETWEEN THE BACKGROUND AND HIS HUM, NOT AS A FRACTION
+         OF HIS HUM. Getting this wrong is why he had to reach over and hit stop.
+
+         It used to be `loudRef * 0.30` - thirty percent of how loud he was - which
+         silently assumes the background is quieter than that. Move the phone a few feet
+         away and it is not: measured on his backyard test, the background sits at 0.32
+         of his hum level in the filtered band. The rule needed under 0.30. It missed by
+         two hundredths, the floor landed UNDERNEATH the background, and only 6% of
+         frames ever read as silent - longest quiet run 160 ms, where a stop needs 1800.
+         It could not have fired no matter how long he waited. And the further the phone,
+         the worse it gets, because his level drops while the world's does not.
+
+         So measure the background too - a low percentile of everything heard so far -
+         and put the floor a third of the way up the gap between background and hum.
+         That adapts to distance and to how loud the place is, with no number in it that
+         assumes either. Measured on the same clip: silent frames 6% -> 56%, longest
+         quiet run 160 ms -> 1480 ms.
+
+         And the tail test is 85%, not every frame: one bird, one car door, one scuff
+         inside 1.8 seconds should not reset the whole window. Level is a far steadier
+         signal than pitch, so a tolerance here does not cause the mid-hum stop that the
+         same tolerance on PITCH caused earlier today. */
       const need = Math.round(HUSH_MS/HOP);
-      const quietFloor = Math.max(0.0015, loudRef*0.30);
+      const sorted = [...lvlLog].sort((a,b)=>a-b);
+      const ambient = sorted.length ? sorted[Math.floor(sorted.length*0.10)] : 0;
+      const quietFloor = Math.max(0.0015, ambient + 0.35*Math.max(0, loudRef-ambient));
       const tail = lvlLog.slice(-need);
-      if(tail.length >= need && tail.every(v => v < quietFloor)) return stop();
+      /* LEVEL ALONE IS NOT ENOUGH WHEN THE HUM IS BARELY ABOVE THE ROOM. Across a yard,
+         or anywhere loud, his hum can sit only a little over the background and there is
+         no floor that separates "humming" from "not" - the stop-test fails those two
+         cases on level alone. But PITCH still knows: when he stops, the detector stops
+         finding a note, even though the level barely moved.
+
+         So either signal can end it. They fail in opposite conditions, which is exactly
+         why using both is safer than either: level survives noise that flickers the pitch
+         track, pitch survives a background as loud as the hum.
+
+         The guard on the pitch branch is what stops it repeating today's earlier mistake.
+         In a car the pitch track goes silent WHILE he is still humming, and a tolerant
+         pitch rule cut his recordings to two seconds. Requiring the level to have fallen
+         well below his hum as well means a loud voice can never be declared finished. */
+      const quietByPitch = (()=>{
+        const fr = frames.slice(-need);
+        if(fr.length < need) return false;
+        const silent = fr.filter(f=>!f.hz).length >= need*0.90;
+        return silent && lvlLog[lvlLog.length-1] < loudRef*0.85;
+      })();
+      if(tail.length >= need &&
+         (tail.filter(v => v < quietFloor).length >= need*0.85 || quietByPitch)) return stop();
     }
     /* 45 s, not 15. The clock starts at the TAP, and the real sequence is tap, phone in
        the grass, walk to the ball, set up, swing - fifteen seconds cut that off
