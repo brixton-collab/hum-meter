@@ -90,13 +90,12 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
     <div id="blocker"></div>
     <div class="card">
       <canvas id="cv"></canvas>
-      <div id="live" class="hint" style="margin-top:10px">Hum one note, right through the ball. It stops on its own.</div>
+      <div id="live" class="hint" style="margin-top:10px">Keep a steady hum through the entire swing.</div>
     </div>
     <button class="btn" id="go">Tap once, then hum</button>
-    <div class="hint" style="margin-top:10px;text-align:center">
-      Put the phone down. Hum through the backswing, the strike and your finish —
-      it stops on its own when you go quiet.
-    </div>
+    <!-- The intro already covered the setup. Repeating it here is noise on every
+         single visit forever, for one visit's worth of value. -->
+    <div class="hint" style="margin-top:10px;text-align:center">It stops on its own.</div>
 
     <div class="card" id="res" style="display:none">
       <div class="score" id="sc">—</div>
@@ -173,6 +172,12 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
         <div class="m"><b>Average hum</b><span class="big" id="allAvg">—</span></div>
       </div>
       <div class="hint" id="allNote" style="margin-top:10px"></div>
+      <div id="nameAsk" style="display:none;margin-top:12px;padding:12px;border-radius:10px;
+           background:#101c18;border:1px solid #1e4436">
+        <b style="font-size:13px;color:var(--go)">You are on the board as “Unnamed”.</b>
+        <div class="hint" style="margin-top:2px">Add a name and it shows up next to your score.</div>
+        <button class="btn ghost" id="addName" style="margin-top:10px">Add your name</button>
+      </div>
     </div>
     <div class="card">
       <b style="font-size:13px">All-time board</b>
@@ -233,12 +238,19 @@ let NAME = localStorage.getItem(NMK) || '';
 function renderWho(){
   // Show a name only once there IS one. "Unnamed golfer · 5f716017" told the user two
   // things they did not ask for and neither of which helps them.
+  /* Ask for a name where it BUYS something, not in the header where it is a chore.
+     "Add your name" at the top of a page you have not used yet is a request with no
+     stated reason - Brixton: "I don't quite get what that's going to do." It only means
+     anything once there is a score to attach it to, so the ask now lives on the
+     leaderboard, and until then the header stays quiet. */
   const el=document.getElementById('who');
   el.innerHTML = NAME
     ? esc(NAME) + ' · <span style="text-decoration:underline;cursor:pointer" id="rec">board code</span>'
-    : '<span style="text-decoration:underline;cursor:pointer" id="rec">Add your name</span>';
+    : '';
   const r=el.querySelector('#rec');
-  if(r) r.onclick = NAME ? recoveryUI : ()=>document.getElementById('editname').click();
+  if(r) r.onclick = recoveryUI;
+  const nameBtn = document.getElementById('editname');
+  if(nameBtn) nameBtn.style.display = NAME ? '' : 'none';
 }
 /* ── CARRYING A BOARD TO ANOTHER PHONE ────────────────────────────────────────
    No account means no password to reset — and also no way to move. The compromise
@@ -840,6 +852,9 @@ async function paintAll(){
     ib.appendChild(tr);
   });
   if(!imp.length) ib.innerHTML='<tr><td colspan="3" class="hint">Needs 6 hums from someone.</td></tr>';
+  // only once they are actually on the board
+  const ask=document.getElementById('nameAsk');
+  if(ask) ask.style.display = (!NAME && Store.mine().length) ? '' : 'none';
 }
 function esc(s){ return String(s).replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
 
@@ -966,6 +981,13 @@ document.getElementById('shareBtn').onclick = async () => {
   try{ await navigator.clipboard.writeText(txt+' '+url);
        b.textContent='Copied — now screenshot the card'; }catch(e){}
   setTimeout(()=>{ b.textContent='Share this'; },2600);
+};
+
+document.getElementById('addName').onclick = () => {
+  const n = prompt('What should the board call you?', '');
+  if(n===null) return;
+  NAME = n.trim().slice(0,24); localStorage.setItem(NMK, NAME);
+  renderWho(); Store.renameAll(NAME); paintMe(); paintAll();
 };
 
 /* ── NAV ──────────────────────────────────────────────────────────────────── */
