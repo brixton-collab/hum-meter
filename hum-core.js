@@ -47,6 +47,7 @@ const TOL_CENTS = 25, TREND_MS = 200, HOLD_MIN_MS = 50, GASP_CENTS = 100, GASP_G
 const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 50,
       CRACK_DROP_MS = 100, CRACK_TAIL_MS = 150;
 const ISO_NEAR_C = 150, ISO_ON_FRAC = 0.40, ISO_MAX_GAP_MS = 1200, ISO_MIN_MS = 700;
+const FOLD_CENTS = 50;
 const median=a=>{ const s=[...a].sort((x,y)=>x-y); const m=s.length>>1;
   return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
 const sd=a=>{ if(a.length<2) return 0; const m=a.reduce((x,y)=>x+y,0)/a.length;
@@ -107,6 +108,22 @@ function robustNote(hz){
     if(!best||agree>best[0]) best=[agree,cand];
   }
   return best ? best[1] : median(hz);
+}
+function foldOctave(hz, ref){
+  if(!hz || !ref) return hz;
+  for(let k=1;k<=2;k++){
+    const up = hz*Math.pow(2,k);
+    if(up <= SR_MAX*1.05 && Math.abs(1200*Math.log2(up/ref)) < FOLD_CENTS) return up;
+  }
+  return hz;
+}
+function anchorNote(hzList){
+  if(!hzList || hzList.length < 6) return 0;
+  let r = robustNote(hzList);
+  if(!r) return 0;
+  const near = t => hzList.filter(h=>Math.abs(1200*Math.log2(h/t))<60).length;
+  if(r*2 <= SR_MAX && near(r*2) > near(r)) r *= 2;
+  return r;
 }
 function confirmNoteOctave(note){
   for(let lift=0; lift<2; lift++){
@@ -383,7 +400,7 @@ function throughImpact(fr, impactFrame, windowMs){
 
 window.HUM = { setFrames, getFrames, HOP, SR_MIN, SR_MAX, VIEW_CENTS, NOTE_NAMES,
                TOL_CENTS, CRACK_CAP, CAL, CLARITY_GATE,
-               median, sd, detect, noteOf, robustNote, confirmNoteOctave,
+               median, sd, detect, noteOf, robustNote, foldOctave, anchorNote, confirmNoteOctave,
                resolveOctaves, deHash, isolate, score, beats,
                signalQuality, gustSuspect, findImpact, throughImpact, WIND };
 

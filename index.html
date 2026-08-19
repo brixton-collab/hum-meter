@@ -259,7 +259,7 @@ const CAL = {
 };
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0, rumbleTrack = [], hiTrack = [], pcmLog = [];
+let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0, rumbleTrack = [], hiTrack = [], pcmLog = [], refNote = 0;
 
 function fit(){ const r = cv.getBoundingClientRect(), d = devicePixelRatio||1;
   cv.width = r.width*d; cv.height = r.height*d; ctx.setTransform(d,0,0,d,0,0); draw(); }
@@ -311,17 +311,35 @@ function retrack(pcm, sr, hopMs, winN){
     const out=[];
     for(let i=0; i+winN<=sig.length; i+=step){
       const d = detect(Float32Array.from(sig.subarray(i,i+winN)), sr, SR_MIN);
-      out.push(d ? {hz:d.hz, clarity:d.clarity} : {hz:0, clarity:0});
+      out.push(d ? {hz:d.hz, clarity:d.clarity} : null);
     }
     return out;
   };
+  const on = t => t.filter(f=>f&&f.hz).length;
   const pass1 = read(wideBand(pcm, sr));
-  const got = pass1.filter(f=>f.hz).map(f=>f.hz).sort((a,b)=>a-b);
+  const got = pass1.filter(f=>f&&f.hz).map(f=>f.hz);
   if(got.length < 3) return pass1;                    // nothing to centre on
-  const note = got[got.length>>1];
-  const pass2 = read(tightBand(pcm, sr, note));
-  // keep whichever pass heard more of the hum
-  return pass2.filter(f=>f.hz).length >= pass1.filter(f=>f.hz).length ? pass2 : pass1;
+
+  /* ⚠️ WHICH NOTE PASS 2 CENTRES ON DECIDES WHETHER THIS HELPS OR DESTROYS THE RECORDING.
+
+     It used to be the plain MEDIAN of pass 1 - and pass 1 halves on breathy frames just
+     like the live track does, so on a hum with enough of them the median lands on the
+     SUBHARMONIC. Pass 2 then band-passes tightly around a note an octave below the
+     voice, which removes the golfer's actual hum from the audio; what is left ringing is
+     the filter itself, a clean high-clarity tone at the wrong frequency. That can WIN
+     the "which pass heard more" test while containing none of the hum. It is how a
+     perfectly good recording came back as "didn't hear a hum."
+
+     So: anchor on the octave-aware note, try the octave above it as well, and keep
+     whichever pass actually hears more of the voice - pass 1 included. */
+  const note = anchorNote(got) || got[got.length>>1];
+  let best = pass1;
+  for(const c of [note, note*2]){
+    if(!c || c > SR_MAX) continue;
+    const p = read(tightBand(pcm, sr, c));
+    if(on(p) > on(best)) best = p;
+  }
+  return best;
 }
 
 function detect(buf, sr, floor){
@@ -583,6 +601,45 @@ function robustNote(hz){
 // 130 Hz that their note is 65. So test the note itself: raise the floor above it and
 // see whether the same audio still has a pitch up there. A hum genuinely down low loses
 // its voicing entirely and stays put, which is what stops every bass hum being lifted.
+/* ── THE OCTAVE LOCK ──────────────────────────────────────────────────────────
+   Brixton, watching the live line while holding one steady note: "these lines are
+   going a little up and down too much for a pretty steady hum."
+
+   He is right, and the movement is not his voice. Autocorrelation has no memory of
+   the note you are already on, so the moment a hum goes breathy the lag at TWICE the
+   period wins and the reading HALVES - the line plunges a full octave and snaps back.
+   Measured on his own board recording: the hum sits in flat plateaus on D#3 and every
+   deep down-spike lands on D#2. Exactly an octave. Every time.
+
+   ⚠️ THIS IS NOT THE BLANKET OCTAVE SNAP THAT WAS TRIED AND REVERTED on 2026-08-18.
+   That one asked "is this frame within 80 cents of an octave?" with nothing to be an
+   octave BELOW - it measured against a median the halved frames had themselves dragged
+   down, so it doubled REAL frames and took his perfect hum from 100 to 75. This one is
+   anchored to a reference note, folds only UPWARD (a subharmonic toward the note, never
+   the reverse), and uses a tight +/-50 cents. A frame sitting ON the note is 0 cents
+   from the reference and 1200 from half of it, so it can never be touched. Vibrato, a
+   glide, a real crack - none of them land within 50 cents of exactly one or two octaves
+   down. Only the artifact does, which is the whole point of anchoring it.            */
+const FOLD_CENTS = 50;
+function foldOctave(hz, ref){
+  if(!hz || !ref) return hz;
+  for(let k=1;k<=2;k++){
+    const up = hz*Math.pow(2,k);
+    if(up <= SR_MAX*1.05 && Math.abs(1200*Math.log2(up/ref)) < FOLD_CENTS) return up;
+  }
+  return hz;
+}
+/* The reference the fold is anchored to. robustNote is already octave-aware, but on a
+   track where enough frames have halved it can still settle on the low one - so try the
+   octave above and keep whichever the voice actually agrees with more often. */
+function anchorNote(hzList){
+  if(!hzList || hzList.length < 6) return 0;
+  let r = robustNote(hzList);
+  if(!r) return 0;
+  const near = t => hzList.filter(h=>Math.abs(1200*Math.log2(h/t))<60).length;
+  if(r*2 <= SR_MAX && near(r*2) > near(r)) r *= 2;
+  return r;
+}
 function confirmNoteOctave(note){
   for(let lift=0; lift<2; lift++){
     const cand = note*2;
@@ -1067,7 +1124,7 @@ async function start(){
   an.fftSize = 2048; src.connect(hp); hp.connect(lp); lp.connect(an);
   const buf = new Float32Array(an.fftSize);
 
-  frames=[]; running=true; heard=false; quietRun=0; rumbleTrack=[]; hiTrack=[]; pcmLog=[]; t0=performance.now();
+  frames=[]; running=true; heard=false; quietRun=0; rumbleTrack=[]; hiTrack=[]; pcmLog=[]; refNote=0; t0=performance.now();
   document.getElementById('res').classList.remove('on');
   document.getElementById('go').classList.add('rec');
   document.getElementById('go').textContent = 'Listening… hum, then swing';
@@ -1112,6 +1169,15 @@ async function start(){
       let y=0, hiE=0;
       for(let i=0;i<raw.length;i++){ y += a*(raw[i]-y); const h=raw[i]-y; hiE += h*h; }
       hiTrack.push(Math.sqrt(hiE/raw.length)); }
+    /* LIVE OCTAVE LOCK - see foldOctave(). Re-anchored every frame from the last two
+       seconds of pitch, so it follows whatever note this golfer hums, and re-applied
+       across the whole track so the picture is consistent rather than fixing itself
+       halfway through. Display only: `hz` is untouched and the scorer still does its
+       own, evidence-checked octave resolution at the end. */
+    { const recent = frames.slice(-50).filter(f=>f.hz).map(f=>f.hz);
+      if(recent.length >= 10){ const r = anchorNote(recent); if(r) refNote = r; }
+      if(refNote) for(const fr of frames) fr.drawHz = foldOctave(fr.hz, refNote); }
+
     const bar = document.getElementById('lvlbar');
     bar.style.width = Math.min(100, lv/0.15*100) + '%';
     bar.className = d ? '' : 'hot';
@@ -1145,8 +1211,15 @@ async function start(){
       if(recent.length >= need && recent.filter(f=>f.hz).length >= need-1) heard = true;
     }
     if(heard){
-      const quiet = frames.slice(-Math.round(HUSH_MS/HOP));
-      if(quiet.length >= Math.round(HUSH_MS/HOP) && quiet.every(f=>!f.hz)) return stop();
+      /* TOLERANT, NOT ABSOLUTE. `quiet.every(f=>!f.hz)` demands 1.8 s in which not one
+         40 ms frame reads as pitch, and at a range nobody clears that bar: a voice two
+         bays over, a gust, a scuff - one stray frame anywhere in forty-five resets the
+         whole window and the recording never ends. The golfer stands there waiting for
+         a score that is not coming, which is the exact thing Brixton hit: "if the hum
+         finishes, you gotta show the score." Nine frames in ten silent IS silence. */
+      const need = Math.round(HUSH_MS/HOP);
+      const quiet = frames.slice(-need);
+      if(quiet.length >= need && quiet.filter(f=>!f.hz).length >= need*0.9) return stop();
     }
     /* 45 s, not 15. The clock starts at the TAP, and the real sequence is tap, phone in
        the grass, walk to the ball, set up, swing - fifteen seconds cut that off
@@ -1167,18 +1240,40 @@ function stop(){
      inside 40 ms. Now that the recording is finished there is time to do it properly:
      filter, find the note, filter tightly around it, and re-read the whole thing. On his
      car recording this turned 2 usable frames into 35. */
+  const liveHz = frames.map(f=>f.hz);   // the track he actually watched. Never lose it.
   if(pcmLog.length > 4096){
     try{
       const pcm = Float32Array.from(pcmLog);
       const re = retrack(pcm, ac ? ac.sampleRate : sampleRate, HOP, 2048);
-      if(re && re.length >= frames.length*0.6){
+      /* ⚠️ ADOPT OR REJECT AS A WHOLE, AND ONLY IF IT HEARD MORE.
+
+         This used to overwrite every frame unconditionally. `if(r)` was testing an
+         OBJECT that retrack returned even for silence - `{hz:0}` is truthy - so a
+         second look that heard nothing wiped out a hum the live track had heard
+         perfectly well. That is the bug behind "I finished my hum and it doesn't show
+         me the score": the line on screen was the live track, correct and full of hum,
+         while the words underneath came from a retracked track that had been zeroed.
+         The two halves of the screen were reading different recordings.
+
+         A second look is only ever an improvement if it hears MORE of the voice. If it
+         hears less, it is wrong, and the live track stands. */
+      const liveOn = liveHz.filter(Boolean).length;
+      const reOn   = re ? re.filter(f=>f&&f.hz).length : 0;
+      if(re && re.length >= frames.length*0.6 && reOn > liveOn){
         for(let i=0;i<frames.length;i++){
           const r = re[Math.min(i, re.length-1)];
-          if(r){ frames[i].hz = r.hz; frames[i].clarity = r.clarity; }
+          frames[i].hz = r ? r.hz : 0;
+          frames[i].clarity = r ? r.clarity : 0;
         }
       }
     }catch(e){ /* if anything goes wrong, the live track is still there */ }
   }
+  /* ALWAYS SCORE IT - the backstop. If anything above still left us with nothing to
+     read, put the live track back rather than tell a golfer who just hummed into the
+     phone that we heard no hum. A wrong score is recoverable; they hum again. A refusal
+     is not - they conclude it is broken, and nobody ever reports it. */
+  { let on=0; for(const f of frames) if(f.hz) on++;
+    if(on < 10) for(let i=0;i<frames.length;i++) frames[i].hz = liveHz[i]; }
 
   // trim leading/trailing silence so a slow start doesn't count as a crack
   let a=0,z=frames.length-1;
@@ -1210,6 +1305,14 @@ function stop(){
   // is the measurement), and mark the cracks from the SCORER, which is octave-guarded and
   // returns zero on his perfect hum. The drama comes from real cracks, not from artifacts.
   if(voiced.length) resolveOctaves(confirmNoteOctave(robustNote(voiced)));
+  /* THE OCTAVE LOCK, on the finished track. resolveOctaves re-asks the audio before it
+     moves anything, which is right and is why it stays - but on the board there is no
+     per-frame audio to re-ask, so it can only fix runs shorter than two frames and the
+     longer plunges survive into both the score and the line. The anchored fold closes
+     that gap: it moves a frame only when it sits within 50 cents of exactly one or two
+     octaves BELOW the confirmed note, which is the artifact and nothing else. */
+  { const ref = anchorNote(frames.filter(f=>f.hz).map(f=>f.hz));
+    if(ref) frames.forEach(f=>{ if(f.hz) f.hz = foldOctave(f.hz, ref); }); }
   frames.forEach(f => { f.drawHz = f.hz; });      // corrected, but NOT de-hashed
   deHash();
 
