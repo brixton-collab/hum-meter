@@ -130,14 +130,20 @@
          own now, so posting it is showing off rather than doing him a favour. -->
     <div id="cta" style="display:none;margin:16px 0;padding:14px;border-radius:12px;
          background:#12241c;border:1px solid #1e4436">
-      <!-- A bare "tag me" asks them for a favour. A challenge with a payoff gives them
-           a reason: something to beat, and something they get back. The score they are
-           looking at IS the hook - they earned it ten seconds ago. -->
-      <b style="color:#3ef2a0">Think you can beat that?</b>
+      <!-- REACH, and why this ask and not a tag.
+           "Screenshot it and tag me" asks a stranger for a favour and DEAD-ENDS: one
+           person, one post, maybe. It does not compound. Sending it to the guy you play
+           with costs them nothing, is the most natural thing in golf - it is a bet - and
+           every send creates another user who can send it again. That is the difference
+           between 100 a day and 100 a day that grows.
+           The tag ask still happens; it just is not the thing being asked for. -->
+      <b style="color:#3ef2a0">Send this to the guy you play with.</b>
       <div style="opacity:.88;font-size:14px;margin-top:4px">
-        Screenshot it and tag <b>@brixton_pg</b>. Every week I take the most interesting
-        hum I'm sent and break the whole swing down on camera.
+        Bet you he cracks before the ball. Copy the link and find out.
       </div>
+      <button id="share" class="ghost" style="margin-top:12px;width:100%">
+        📋 Copy the link
+      </button>
     </div>
 
     <p class="cardhint">Screenshot this to share it 👇</p>
@@ -777,6 +783,14 @@ function beats(total){
    Priority order matters. A hum that stopped at the ball is a more useful thing to
    be told than a band, and a crack is more useful than a wobble - so the specific
    failure always wins over the generic grade.                                     */
+/* One writer for the sentence, so it can be blank and simply disappear rather than
+   leaving an orphan gap where a paragraph used to be. */
+function setSay(main, tail){
+  const el=document.getElementById('sy');
+  const t=[main, tail].filter(Boolean).join('  ·  ');
+  el.textContent=t; el.style.display = t ? '' : 'none';
+}
+
 function verdict(s){
   const col = s.total>=CAL.bands.ELITE ? ['ELITE','var(--go)']
             : s.total>=CAL.bands.CLEAN ? ['CLEAN','var(--ok)']
@@ -817,13 +831,13 @@ function verdict(s){
     say = 'Solid. You stayed on one note the whole way and never broke it. '
         + 'Take the wobble out and this is an elite hum.';
   }
-  else if(s.total >= CAL.bands.SHAKY){
-    say = 'Your note kept moving. It never broke — it just wandered. '
-        + 'Pick one note and hold THAT note, all the way through.';
-  }
   else {
-    say = 'Your hum never settled on a note. Pick one and keep it in the same place — '
-        + 'steady beats loud.';
+    // SHAKY and NEEDS WORK say NOTHING, on purpose.
+    // A specific failure is worth a sentence - "you lost it right at the ball" tells a
+    // golfer what to do next. A generic one is not: "pick one note and hold it" is just
+    // the score restated as advice, and it reads as nagging the people who did worst.
+    // The number and the line already said it. Silence is the stronger note here.
+    say = '';
   }
 
   // Reported, never scored: a straight line that tilts is still a straight line.
@@ -1098,7 +1112,7 @@ function stop(){
   document.getElementById('sc').style.color = col;
   document.getElementById('bd').textContent = bd;
   document.getElementById('bd').style.color = col;
-  document.getElementById('sy').textContent = say;
+  setSay(say);
   // ONE number, not two.
   //
   // "Wobble" and "drift" are what the score is actually made of, but they are engineer
@@ -1117,8 +1131,9 @@ function stop(){
     ? s.tension.length + ' stop' + (s.tension.length>1?'s':'') + ' · first at ' + s.tension[0].at.toFixed(1) + 's'
     : Math.round(s.onAir) + '% on · ' + s.held.toFixed(1) + 's';
   const pctBeat = beats(s.total);
-  document.getElementById('sy').textContent =
-    say + (pctBeat ? '  ·  Better than ' + pctBeat + '% of hums measured.' : '');
+  // "Better than X%" is the one line worth keeping even on a low score — it is a fact
+  // about them, not advice at them.
+  setSay(say, pctBeat ? 'Better than ' + pctBeat + '% of hums measured.' : '');
   drawCard(s, bd, col, pctBeat);
   logAttempt(s, bd);
   logHum(s, bd);          // usage + the scores, if CLOUD is configured
@@ -1172,11 +1187,9 @@ function stop(){
       + '</b>';
   }
   if(through && through.restrictedAt)
-    document.getElementById('sy').textContent =
-      'Your hum stopped AT the ball. That is where you tightened up — the whole game is keeping the sound going through it.';
+    setSay('You lost your hum right at the ball. That is where you tightened up.');
   else if(through && through.survived && !s.cracks.length)
-    document.getElementById('sy').textContent =
-      'You held the note straight through the ball. That is the one that matters.';
+    setSay('You held the note straight through the ball. That is the one that matters.');
 
   const cta = document.getElementById('cta');
   if(cta) cta.style.display = '';
@@ -1203,6 +1216,22 @@ try{ attempts = JSON.parse(localStorage.getItem('humAttempts')||'[]'); }catch(e)
 
 if(new URLSearchParams(location.search).has('debug'))
   document.getElementById('diag').style.display = '';
+
+document.getElementById('share').onclick = async () => {
+  const url = 'https://brixton-collab.github.io/hum-meter/';
+  const sc = document.getElementById('sc').textContent;
+  const txt = 'I scored ' + sc + ' on the Hum Meter. Bet you crack before the ball 😏';
+  const b = document.getElementById('share');
+  // The native share sheet is the whole point on a phone — it puts the link one tap from
+  // their group chat, which is where golf bets actually live.
+  if(navigator.share){
+    try{ await navigator.share({title:'Hum Meter', text:txt, url}); return; }catch(e){}
+  }
+  try{ await navigator.clipboard.writeText(txt + ' ' + url);
+       b.textContent='✅ Copied — go paste it'; }
+  catch(e){ b.textContent = url; }
+  setTimeout(()=>{ b.textContent='📋 Copy the link'; }, 2600);
+};
 
 document.getElementById('dcopy').onclick = async () => {
   const txt = 'HUM METER — ' + attempts.length + ' attempts (steadiness = % of span on your own line, tol '
@@ -1273,7 +1302,11 @@ function drawCard(s, bandName, colVar, pctBeat){
     W/2, py+ph+80);
 
   g.fillStyle='#f2f6fb'; g.font='700 40px -apple-system,Inter,system-ui,sans-serif';
-  g.fillText('Score your hum → @brixton_pg', W/2, H-90);
+  // A screenshot is the most-travelled version of this page, and it has to be
+  // self-serving: a handle makes someone go and search, a URL is a straight path.
+  g.fillText('Score your hum  ·  @brixton_pg', W/2, H-140);
+  g.fillStyle='#3ef2a0'; g.font='600 34px -apple-system,Inter,system-ui,sans-serif';
+  g.fillText('brixton-collab.github.io/hum-meter', W/2, H-78);
 }
 
 // Tap to start, tap to stop — not press-and-hold. Holding a button down for five
