@@ -1,10 +1,15 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   HUM CORE — the validated DSP and scoring, lifted VERBATIM from hum-meter.html
-   on 2026-08-18 so the simple meter and the full board can never drift apart.
+   HUM CORE — GENERATED. Do not edit.
 
-   Do NOT edit the maths by hand. Change hum-meter.html, re-run the extractor, and
-   re-run the seven graded anchors before shipping either page. Twice on the day
-   this was written a change that looked obviously right broke an anchor.
+   Built from hum-meter.html by build-core.py so the simple meter and the full board
+   can never disagree about a score. Change the maths in the METER, then:
+
+       python3 build-core.py && ANCHORS=./anchors.json node hum-test.js
+
+   The first version of this file had its constants typed out by hand and two of them
+   silently drifted (JUMP_HOLD_MS 120 vs 80; CLARITY_MIN missing entirely, so detect()
+   threw outside a browser). A core that disagrees with the page is worse than none —
+   every test it passes is a lie about the thing that ships.
    ───────────────────────────────────────────────────────────────────────────── */
 let frames = [];
 function setFrames(f){ frames = f; }
@@ -12,19 +17,36 @@ function getFrames(){ return frames; }
 
 const HOP = 40;                       // ms between pitch frames
 const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
+const JUMP_CENTS = 50;                // pitch move that counts as a crack...
+const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
+const CLARITY_MIN = 0.55;             // below this the frame isn't a tone
+const CLARITY_GATE = 0.62;            // below this the RECORDING is too rough to score
+const OCTAVE_OFF_CENTS = 150;         // this far off the note = wrong octave, not vibrato
+const HUSH_MS = 1400;                 // silence this long after a hum = you're done
+const CAL = {
+  // REBUILT 2026-08-18 for the steadiness rewrite. The old weights/scales belonged to
+  // wobble+drift and are gone; nothing here is tuned by feel.
+  //
+  // The BANDS are Brixton's, unchanged, and they survived the rewrite untouched — his
+  // three Nail the Pitch reference recordings land 99.6 / 80.9 / 66.2 against them.
+  //
+  // The PERCENTILES are measured, not asserted: 28 real hums (21 population + his 3
+  // references + 4 swing hums) rescored under the new metric. They exist only so
+  // "better than X% of hums measured" is a true sentence. Recompute them with
+  // hum-steady.py whenever the population grows — never hand-edit.
+  //
+  // There is no scale left to calibrate. The score is a direct physical measurement —
+  // the % of the span you spent on your own line — not a percentile of a population,
+  // so "you held your line 88% of the time" means the same thing in week 1 and week 30.
+  "bands":   { "ELITE": 85, "CLEAN": 70, "SHAKY": 60 },
+  "percentiles": {"5": 66.0, "10": 67.6, "25": 71.3, "50": 77.5, "75": 83.4, "90": 94.9, "95": 96.0}
+};
 const VIEW_CENTS = 350;
 const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
-const OCTAVE_OFF_CENTS = 150;         // this far off the note = wrong octave, not vibrato
-const JUMP_CENTS = 50, JUMP_HOLD_MS = 120;
-const CLARITY_GATE = 0.62;            // below this the RECORDING is too rough to score
 const TOL_CENTS = 25, TREND_MS = 200, HOLD_MIN_MS = 50, GASP_CENTS = 100, GASP_GAP_MS = 250;
 const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 50,
       CRACK_DROP_MS = 100, CRACK_TAIL_MS = 150;
 const ISO_NEAR_C = 150, ISO_ON_FRAC = 0.40, ISO_MAX_GAP_MS = 1200, ISO_MIN_MS = 700;
-const CAL = {
-  "bands":   { "ELITE": 85, "CLEAN": 70, "SHAKY": 60 },
-  "percentiles": {"5": 66.0, "10": 67.6, "25": 71.3, "50": 77.5, "75": 83.4, "90": 94.9, "95": 96.0}
-};
 const median=a=>{ const s=[...a].sort((x,y)=>x-y); const m=s.length>>1;
   return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
 const sd=a=>{ if(a.length<2) return 0; const m=a.reduce((x,y)=>x+y,0)/a.length;
@@ -56,13 +78,11 @@ function detect(buf, sr, floor){
   const shift = (a-c) ? 0.5*(a-c)/(a-2*b+c) : 0;
   return { hz: sr/(best+shift), clarity: bestV, rms };
 }
-
 function noteOf(hz){
   const midi = Math.round(69 + 12*Math.log2(hz/440));
   return { name: NOTE_NAMES[(midi%12+12)%12] + (Math.floor(midi/12)-1),
            hz: 440*Math.pow(2,(midi-69)/12) };
 }
-
 function robustNote(hz){
   if(!hz.length) return 0;
   let sx=0, sy=0;
@@ -79,7 +99,6 @@ function robustNote(hz){
   }
   return best ? best[1] : median(hz);
 }
-
 function confirmNoteOctave(note){
   for(let lift=0; lift<2; lift++){
     const cand = note*2;
@@ -96,7 +115,6 @@ function confirmNoteOctave(note){
   }
   return note;
 }
-
 function resolveOctaves(note){
   const off = frames.map(f => f.hz && Math.abs(1200*Math.log2(f.hz/note))>=OCTAVE_OFF_CENTS);
   if(!off.some(Boolean)) return;
@@ -122,7 +140,6 @@ function resolveOctaves(note){
     i=j;
   }
 }
-
 function deHash(){
   const raw = frames.map(f=>f.hz);
   for(let i=0;i<frames.length;i++){
@@ -130,7 +147,6 @@ function deHash(){
     if(w.length) frames[i].hz = w[w.length>>1];
   }
 }
-
 function isolate(fr){
   const idx=[]; fr.forEach((f,i)=>{ if(f.hz) idx.push(i); });
   if(idx.length<10) return [0, fr.length];
@@ -153,7 +169,6 @@ function isolate(fr){
   if((end-start)*HOP < ISO_MIN_MS) return [0, fr.length];
   return [start, end+1];
 }
-
 function score(){
   const [i0,i1] = isolate(frames);
   const hum = frames.slice(i0,i1);
@@ -229,13 +244,15 @@ function score(){
   const finalTotal = cracks.length ? total * (CRACK_CAP/100) : total;
 
   const tilt = den ? (num/den)*(n-1) : 0;
-  const clar = span.filter(f=>f.hz).reduce((s,f)=>s+f.clarity,0)/vh.length;
+  // (f.clarity||0): deHash can turn a previously-unvoiced frame voiced, and those frames
+  // were pushed without a clarity value. One undefined turns the whole average into NaN,
+  // which is what put "NaN" on screen where a percentage should be.
+  const clar = span.filter(f=>f.hz).reduce((s,f)=>s+(f.clarity||0),0)/Math.max(vh.length,1);
   return { total: Math.round(finalTotal*10)/10, line, onAir, tension, tilt, note, cracks, capped,
            humStart: i0+first, humWindow: [i0*HOP/1000, i1*HOP/1000],
            jitter: median(dev)*1.4826, held:(vh.length*HOP)/1000,
            span:(span.length*HOP)/1000, purity: clar, rough: clar < CLARITY_GATE };
 }
-
 function beats(total){
   const ps = Object.keys(CAL.percentiles).map(Number).sort((a,b)=>a-b);
   let below = 0;
@@ -243,7 +260,6 @@ function beats(total){
   if(total < CAL.percentiles[String(ps[0])]) return null;
   return below;
 }
-
 /* ── WIND / NOISE GATE ────────────────────────────────────────────────────────
    Brixton: "hey, too windy, redo your hum."
 
@@ -255,7 +271,31 @@ function beats(total){
      1. CLARITY  - the detector's own confidence. Wind makes it guess.
      2. VOICED % - wind masks the fundamental, so frames stop resolving at all.
      3. RUMBLE   - wind is overwhelmingly sub-100 Hz energy. A hum is not.        */
-const WIND = { clarity: 0.55, voiced: 0.45, rumble: 0.55, runMs: 160 };
+const WIND = { clarity: 0.55, voiced: 0.30, rumble: 0.62, holdMs: 400, gust: 0.55 };
+
+/* WIND-INDUCED FALSE CRACKS — the failure the synthetic wind suite exposed, and the
+   only one that produced a WRONG number rather than a refused one.
+
+   `steady__wind-10mph-loud` scored 74.3 against a clean baseline of 99.6 — a 25-point
+   error — while every gate metric looked healthy (mean rumble 0.36, clarity 0.90,
+   voiced 0.99). A gust had landed mid-hum and manufactured a crack, and the crack cap
+   then did the rest. Averages hide gusts by construction: wind is peaky, so the mean
+   is dominated by the calm between them.
+
+   Two things came out of measuring it:
+     · Use the 90th PERCENTILE of rumble, not the mean. Clean audio tops out at 0.32;
+       anything windy is 0.46+. The mean does not separate them.
+     · Refuse NARROWLY. Heavy wind does not always break the score - a 25 mph gale
+       still scored a clean hum 100. Refusing every windy recording would turn away a
+       golfer on an ordinary breezy day, and they do not come back. So refuse only the
+       case that is actually ambiguous: it was gusty AND the result contains a crack,
+       which is precisely when a crack cannot be attributed to the golfer.            */
+function gustSuspect(rumbleSeries, cracks){
+  if(!rumbleSeries || !rumbleSeries.length || !cracks) return false;
+  const r = [...rumbleSeries].sort((a,b)=>a-b);
+  const p90 = r[Math.min(r.length-1, Math.round(0.90*(r.length-1)))];
+  return p90 > WIND.gust;
+}
 
 function signalQuality(fr, rumbleRatio){
   const v = fr.filter(f=>f.hz);
@@ -263,16 +303,21 @@ function signalQuality(fr, rumbleRatio){
   const clarity = v.length ? v.reduce((s,f)=>s+(f.clarity||0),0)/Math.max(v.length,1) : 0;
   const rumble = rumbleRatio == null ? 0 : rumbleRatio;
 
-  /* FRAGMENTATION — the check that catches a failing microphone.
-     Found by the regression suite on 2026-08-18: a track that alternates voiced /
-     unvoiced every single frame scored 100. It is obviously not a hum, but it is 50%
-     voiced (so it passes the voiced test) and the de-hash median then fills every
-     one-frame gap, leaving a flawless flat line. A stranger with a flaky mic would
-     have been handed a perfect score.
+  /* "DID IT EVER HOLD A NOTE?" — the check that separates a failing microphone from a
+     real swing hum, and the two look far more alike than you would expect.
 
-     A real hum is a few LONG runs of pitch. A broken signal is many tiny ones. So
-     measure the typical run length: under ~160 ms and it is not a hum, whatever the
-     percentages say.                                                                */
+     First attempt was MEDIAN run length, and the wind test caught it immediately: it
+     REFUSED a clean, genuine swing hum. Measured, a real swing hum's run distribution
+     is [1,1,1,1,1,1,1,1,2,2,3,3,4,7,…] — median 80 ms — because a swing hum CRACKS,
+     and the cracks are the thing we are here to measure. Rejecting a fragmented hum
+     rejects exactly the golfers who need the number most.
+
+     A flapping mic is [1,1,1,1,1,…] and nothing else: median 40 ms, and crucially a
+     LONGEST run of 40 ms. It never sustains anything.
+
+     So the question is not "is it fragmented" - a real swing hum IS fragmented. It is
+     "did it EVER hold a note?" One continuous stretch of 400 ms anywhere is enough to
+     say a voice was there; no such stretch means the microphone was failing.          */
   const runs = [];
   let n = 0;
   for(let i=0;i<fr.length;i++){
@@ -280,15 +325,14 @@ function signalQuality(fr, rumbleRatio){
     else if(n){ runs.push(n); n=0; }
   }
   if(n) runs.push(n);
-  runs.sort((a,b)=>a-b);
-  const medRun = runs.length ? runs[runs.length>>1] * HOP : 0;
+  const longestMs = runs.length ? Math.max(...runs) * HOP : 0;
 
   const fails = [];
-  if(clarity < WIND.clarity) fails.push('clarity');
-  if(voiced  < WIND.voiced)  fails.push('voiced');
-  if(rumble  > WIND.rumble)  fails.push('rumble');
-  if(runs.length > 2 && medRun < WIND.runMs) fails.push('fragmented');
-  return { ok: fails.length === 0, clarity, voiced, rumble, medRun, fails };
+  if(clarity < WIND.clarity)  fails.push('clarity');
+  if(voiced  < WIND.voiced)   fails.push('voiced');
+  if(rumble  > WIND.rumble)   fails.push('rumble');
+  if(longestMs < WIND.holdMs) fails.push('never-held-a-note');
+  return { ok: fails.length === 0, clarity, voiced, rumble, longestMs, fails };
 }
 
 /* ── IMPACT ───────────────────────────────────────────────────────────────────
@@ -328,4 +372,5 @@ window.HUM = { setFrames, getFrames, HOP, SR_MIN, SR_MAX, VIEW_CENTS, NOTE_NAMES
                TOL_CENTS, CRACK_CAP, CAL, CLARITY_GATE,
                median, sd, detect, noteOf, robustNote, confirmNoteOctave,
                resolveOctaves, deHash, isolate, score, beats,
-               signalQuality, findImpact, throughImpact, WIND };
+               signalQuality, gustSuspect, findImpact, throughImpact, WIND };
+

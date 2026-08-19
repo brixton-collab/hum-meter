@@ -990,10 +990,13 @@ async function start(){
     let lv=0; for(let i=0;i<raw.length;i++) lv+=raw[i]*raw[i];
     lv = Math.sqrt(lv/raw.length);
 
-    // RUMBLE. Wind is overwhelmingly sub-100 Hz energy; a hum is not. A one-pole
-    // low-pass at ~100 Hz and a ratio of energies is enough to tell them apart, and it
-    // costs nothing — no FFT, no second analyser node.
-    { const dt=1/ac.sampleRate, rc=1/(2*Math.PI*100), a=dt/(rc+dt);
+    // RUMBLE. Wind is overwhelmingly low-frequency energy; a hum is not.
+    // ⚠️ The cutoff is 55 Hz, NOT 100 Hz, and that matters: his hums sit at 108-140 Hz,
+    // so a 100 Hz low-pass captures a big slice of the FUNDAMENTAL and reads 0.41-0.49
+    // on perfectly clean audio — it was measuring the voice. Measured across the
+    // synthetic wind suite, 55 Hz puts a clean hum near 0.1 and a 15 mph gust past 0.6,
+    // which is the headroom a threshold needs to mean anything.
+    { const dt=1/ac.sampleRate, rc=1/(2*Math.PI*55), a=dt/(rc+dt);
       let y=0, lo=0;
       for(let i=0;i<raw.length;i++){ y += a*(raw[i]-y); lo += y*y; }
       lo = Math.sqrt(lo/raw.length);
@@ -1092,6 +1095,12 @@ function stop(){
   const voicedPct = frames.length ? frames.filter(f=>f.hz).length/frames.length : 0;
   const rumble = rumbleTrack.length
     ? rumbleTrack.reduce((a,b)=>a+b,0)/rumbleTrack.length : 0;
+  // GUSTS hide inside an average. Wind is peaky, so the mean is dominated by the calm
+  // between gusts; measured on synthetic wind, clean audio tops out at p90 = 0.32 while
+  // anything windy is 0.46+. The mean does not separate them at all.
+  const rsorted = [...rumbleTrack].sort((a,b)=>a-b);
+  const rumbleP90 = rsorted.length
+    ? rsorted[Math.min(rsorted.length-1, Math.round(0.90*(rsorted.length-1)))] : 0;
   // FRAGMENTATION — caught by the regression suite, not by eye. A track that flips
   // voiced/unvoiced every frame is 50% voiced (so it survives the voiced test) and the
   // de-hash median then fills every one-frame gap, leaving a flawless flat line: a
@@ -1102,13 +1111,29 @@ function stop(){
   if(rn) runs.push(rn);
   runs.sort((a,b)=>a-b);
   const medRun = runs.length ? runs[runs.length>>1]*HOP : 0;
-  const flapping = runs.length > 2 && medRun < 160;
+  // "Did it EVER hold a note?" - NOT "is it fragmented". Measured, a real swing hum's
+  // run distribution is [1,1,1,1,1,1,1,1,2,2,3,3,4,7,…] because a swing hum CRACKS, and
+  // an earlier median-run test refused clean genuine swing hums outright. A failing mic
+  // is [1,1,1,…] and nothing else - it never sustains anything.
+  const longestMs = runs.length ? Math.max(...runs)*HOP : 0;
+  const flapping = longestMs < 400;
 
-  const windy = rumble > 0.55, thin = voicedPct < 0.45;
-  if(s.rough || windy || thin || flapping){
+  const windy = rumble > 0.62, thin = voicedPct < 0.30;
+
+  /* THE ONE THAT REPORTED A WRONG NUMBER. In the synthetic wind suite a 10 mph gust
+     landed mid-hum and manufactured a crack: the score came back 74.3 against a clean
+     baseline of 99.6, and every gate metric looked healthy. The crack cap then did the
+     rest. So refuse NARROWLY - not "it was windy", but "it was gusty AND there is a
+     crack", which is exactly when a crack cannot honestly be attributed to the golfer.
+     Refusing every windy recording would turn away someone on an ordinary breezy day,
+     and they do not come back. A 25 mph gale still scored a clean hum 100.0, correctly. */
+  const gusty = rumbleP90 > 0.55 && s.cracks.length > 0;
+
+  if(s.rough || windy || thin || flapping || gusty){
     document.getElementById('hint').innerHTML =
       '<b style="color:var(--warn)">⚠️ Couldn’t hear that one fairly — go again.</b> ' +
-      (windy ? 'Too much wind on the mic. Turn out of the wind, or cup a hand around the phone.'
+      (gusty ? 'The wind gusted while you hummed, so I cannot tell whether that break was you or the wind.'
+       : windy ? 'Too much wind on the mic. Turn out of the wind, or cup a hand around the phone.'
        : flapping ? 'The mic kept cutting in and out. Move the phone closer and try again.'
        : thin ? 'I kept losing your note. Hold ONE note and keep it going.'
        : 'Too much background noise. Somewhere quieter, phone closer.') +
