@@ -995,8 +995,43 @@ function score(rumble){
   // improve. So the ceiling COMPRESSES instead of clipping: a cracked hum is scaled into
   // 0..74.9 by how good it otherwise was. Ordering is preserved, the rule is honoured,
   // and the range below 75 is actually used.
+  /* ── AND THE FIX TO THE FIX (2026-08-19). ────────────────────────────────────
+     `total * 0.749` is a FLAT 25% HAIRCUT, and a flat haircut turns the crack rule into
+     a cliff. Measured on four of his hums in a row: a clean one scored 89, and one that
+     was identical apart from a SINGLE 100 ms dropout scored 63. One dropout, 26 points.
+     He felt it immediately - "the 63s maybe should have been like 68s" - and he is
+     right, because nothing about those two hums is 26 points apart.
+
+     The rule stays: he locked "if the hum cracks, the score has to be definitely below
+     75", and 74.9 is still the ceiling. What changes is that the drop below it is now
+     proportional to the DAMAGE - how much of the hum the cracks actually destroyed -
+     instead of being the same 25% whether you lost 100 ms or two seconds. One short
+     crack lands just under the ceiling; a hum that keeps falling apart still goes deep.
+
+     This is the same mistake as the original flat ceiling, one level down. That one
+     piled every cracked hum onto exactly 74.9; this one piled them all onto 0.749x. */
   const capped = cracks.length > 0 && total > CRACK_CAP;
-  const finalTotal = cracks.length ? total * (CRACK_CAP/100) : total;
+  /* TWO TERMS, AND THE SECOND ONE IS CRACK COUNT - which is what HIS OWN GRADES separate
+     on, once you lay them out. Scaling by total crack MILLISECONDS was tried first and
+     collapsed three anchors onto exactly 48.7, which is the original flat-ceiling bug
+     wearing a different number. The measurement that killed it:
+
+       REF3    11 cracks, 148 ms lost per second   he said "the hum is lost"
+       SWING63  5 cracks, 191 ms lost per second   he said "~63"
+
+     Nearly the same damage, and he graded them fifteen points apart - so damage alone
+     cannot be the answer, and neither can `total`: REF3's pitch is STEADIER than
+     SWING63's between the breaks. What actually separates them is how many times the
+     hum broke. Five breaks is a swing hum, which is what a swing hum does. Eleven is a
+     hum that keeps falling apart, and that is what he means by lost.
+
+     So: a gentle curve on total keeps a nearly-clean hum just under the 74.9 ceiling
+     (one short crack now reads 68 instead of 63 - his correction), and a count term
+     takes a hum that keeps breaking down into the 40s. The first crack is free of the
+     count term on purpose: one break should cost you the ceiling, not the floor. */
+  const shape   = Math.pow(Math.max(0,total)/100, 0.55);
+  const repeats = 1 - Math.min(0.30, Math.max(0, cracks.length-1)*0.03);
+  const finalTotal = cracks.length ? Math.min(total, CRACK_CAP*shape*repeats) : total;
 
   const tilt = den ? (num/den)*(n-1) : 0;
   // (f.clarity||0): deHash can turn a previously-unvoiced frame voiced, and those frames
