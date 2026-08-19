@@ -47,9 +47,9 @@ tr.me td{background:#10241d}
    to be really too hard." He is rating a shot he just hit, phone in one hand, club in
    the other - if it takes a scroll and a hunt it does not get tapped, and an untapped
    rating is a missing row in the only dataset that matters. */
-.skey{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:8px;
-  color:var(--dim);font-size:12px}
-.skey b{color:var(--ink);display:inline-block;min-width:16px}
+.skey{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px;color:var(--dim)}
+.skey td{padding:3px 0;vertical-align:top}
+.skey td:first-child{width:26px;color:var(--ink);font-weight:800}
 .strike{display:flex;gap:3px;margin-top:10px}
 .strike button{flex:1 1 0;min-width:0;padding:14px 0;border-radius:8px;background:#0f1620;
   border:1px solid var(--line);font-weight:700;font-size:15px;line-height:1}
@@ -113,23 +113,27 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
              10 perfectly flush. The anchors matter more than the buttons - "7 or 8?"
              is unanswerable without them, and an unanswerable question gets skipped,
              and a skipped rating is a missing row in the only dataset that matters. -->
-        <div class="skey">
-          <span><b>0</b> absolutely terrible</span>
-          <span><b>5</b> 20 yards fat</span>
-          <span><b>8</b> pretty solid</span>
-          <span><b>10</b> perfectly flush</span>
-        </div>
+        <!-- Four rows, not two columns. A golfer is matching a shot they just hit
+             against a description, and a description is a sentence - stacked, they scan;
+             side by side, they collide. His wording throughout: the anchors are outcomes
+             ("would be on the putting green"), not adjectives, which is what makes a
+             number pickable in two seconds with a club still in your hand. -->
+        <table class="skey">
+          <tr><td>0</td><td>borderline chunk / whiff</td></tr>
+          <tr><td>5</td><td>20 yards short of the green, or over it</td></tr>
+          <tr><td>8</td><td>solid strike — would be on the putting green</td></tr>
+          <tr><td>10</td><td>perfectly flush</td></tr>
+        </table>
         <div class="strike" id="strike"></div>
         <div class="hint" id="strikeDone" style="margin-top:8px;display:none"></div>
       </div>
-      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
-        <b style="font-size:13px">Share it</b>
-        <div class="hint" style="margin-top:2px">Your line against Brixton's. Screenshot or tap share.</div>
-        <canvas id="card" style="width:100%;height:auto;border-radius:12px;margin-top:10px;
-                border:1px solid var(--line);display:block"></canvas>
-        <button class="btn ghost" id="shareBtn" style="margin-top:10px">Share this</button>
-      </div>
-
+      <!-- SHARE — pulled out on purpose, 2026-08-19. Brixton on the You-vs-Brixton
+           card: "I just don't think that's something people are going to share." He is
+           probably right, and a share button nobody taps is worse than none: it takes up
+           the most valuable space on the page (directly under a score they just earned)
+           and teaches them the page has nothing more to offer. drawShareCard() and the
+           card renderer are left intact below - the mechanic is what was wrong, not the
+           drawing - so it can come straight back once there is a reason to tap it. -->
     </div>
   </section>
 
@@ -644,7 +648,7 @@ function showResult(s){
     impact_at: s.impact ? +(s.impact.frame*H.HOP/1000).toFixed(2) : null
   };
   Store.add(pendingHum).then(()=>{ paintMe(); paintAll(); });
-  drawShareCard(s);
+  if(document.getElementById('card')) drawShareCard(s);
   buildStrike();
 }
 
@@ -963,7 +967,8 @@ function drawShareCard(s){
   g.fillText('brixton-collab.github.io/hum-meter   ·   @brixton_pg', PX, y2+126);
 }
 
-document.getElementById('shareBtn').onclick = async () => {
+const _shareBtn = document.getElementById('shareBtn');
+if(_shareBtn) _shareBtn.onclick = async () => {
   const url='https://brixton-collab.github.io/hum-meter/board.html';
   const c=document.getElementById('card');
   const sc=document.getElementById('sc').textContent;
