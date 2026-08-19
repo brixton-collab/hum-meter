@@ -27,6 +27,8 @@ canvas{width:100%;height:300px;display:block;border-radius:10px;background:#0d14
 .m{background:#0f1620;border:1px solid var(--line);border-radius:10px;padding:10px}
 .m b{display:block;font-size:10px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;font-weight:700}
 .m span{font-size:15px;font-weight:600}
+.how{margin:12px 0 10px;padding:0 0 0 20px;color:var(--dim);font-size:14px;line-height:1.55}
+.how li{margin:6px 0}.how b{color:var(--ink)}
 nav{position:fixed;bottom:0;left:0;right:0;background:#0d131b;border-top:1px solid var(--line);
   display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:20}
 nav button{flex:1;padding:14px 4px;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--dim)}
@@ -60,6 +62,21 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
 
   <!-- ── HUM ───────────────────────────────────────────────────────────── -->
   <section class="view on" id="v-hum">
+    <!-- FIRST RUN. Someone arriving cold has no idea this is meant to be used with a
+         club in their hands and the phone on the ground - and if they hum sitting on a
+         sofa the number is real but the point is lost. Shown once, then never again;
+         a wall you have to dismiss every visit is worse than no wall. -->
+    <div class="card" id="firstrun" style="display:none;border-color:#1e4436;background:#101c18">
+      <b style="font-size:15px">Hum through your swing. See where it breaks.</b>
+      <ol class="how">
+        <li><b>Phone on the ground</b> next to your ball, screen up.</li>
+        <li><b>Tap start and hum one note</b> — through the backswing, the ball, and
+            your finish. Don’t stop when you hit it.</li>
+        <li><b>Pick it up.</b> It stops on its own when you go quiet.</li>
+      </ol>
+      <div class="hint">Where your hum breaks is where you tighten up. That is the whole thing.</div>
+      <button class="btn" id="firstok" style="margin-top:12px">Got it</button>
+    </div>
     <div id="blocker"></div>
     <div class="card">
       <canvas id="cv"></canvas>
@@ -116,16 +133,16 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
       </div>
       <canvas class="spark" id="spark"></canvas>
     </div>
-    <div class="card">
-      <b style="font-size:13px">Your last 10</b>
-      <table style="margin-top:8px"><thead><tr><th>When</th><th>Score</th><th>Note</th><th>Cracks</th><th>Strike</th></tr></thead>
-      <tbody id="myRows"><tr><td colspan="5" class="hint">No hums yet.</td></tr></tbody></table>
-    </div>
     <div class="card" id="tensionCard">
       <b style="font-size:13px">Where you lose it</b>
       <div class="hint" style="margin-top:2px">Every crack you've had, lined up on the ball.</div>
       <canvas class="spark" id="tension" style="height:120px"></canvas>
       <div class="hint" id="tensionText" style="margin-top:8px">Needs a few swing hums.</div>
+    </div>
+    <div class="card">
+      <b style="font-size:13px">Your last 10</b>
+      <table style="margin-top:8px"><thead><tr><th>When</th><th>Score</th><th>Note</th><th>Cracks</th><th>Strike</th></tr></thead>
+      <tbody id="myRows"><tr><td colspan="5" class="hint">No hums yet.</td></tr></tbody></table>
     </div>
     <div class="card" id="strikeCard">
       <b style="font-size:13px">Does a better hum mean a better strike?</b>
@@ -873,6 +890,15 @@ document.querySelectorAll('nav button').forEach(b=>{
     if(b.dataset.v==='all') paintAll();
   };
 });
+
+/* first run, once */
+if(!localStorage.getItem('humSeenIntro')){
+  document.getElementById('firstrun').style.display='';
+}
+document.getElementById('firstok').onclick=()=>{
+  localStorage.setItem('humSeenIntro','1');
+  document.getElementById('firstrun').style.display='none';
+};
 
 renderWho(); fit(); draw(); paintMe(); paintAll();
 </script>
