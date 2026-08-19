@@ -85,7 +85,7 @@
     <li><b>Pick it up and look.</b> It stops on its own when you go quiet.</li>
   </ol>
   <p class="hint" style="margin:-4px 0 14px">
-    No club handy? Just hum one steady note for a few seconds — it still scores it.
+    No club handy? Hum one steady note for a few seconds. It still scores it.
   </p>
 
   <div class="stage">
@@ -137,16 +137,16 @@
            every send creates another user who can send it again. That is the difference
            between 100 a day and 100 a day that grows.
            The tag ask still happens; it just is not the thing being asked for. -->
-      <b style="color:#3ef2a0">Send this to the guy you play with.</b>
+      <b style="color:#3ef2a0">Send this to whoever you play with.</b>
       <div style="opacity:.88;font-size:14px;margin-top:4px">
-        Bet you he cracks before the ball. Copy the link and find out.
+        See if they can hold theirs through the ball.
       </div>
       <button id="share" class="ghost" style="margin-top:12px;width:100%">
         📋 Copy the link
       </button>
     </div>
 
-    <p class="cardhint">Screenshot this to share it 👇</p>
+    <p class="cardhint">Screenshot this to share it</p>
     <canvas id="card"></canvas>
 
     <!-- Calibration is currently built from 14 Instagram-compressed hums by about five
@@ -809,27 +809,23 @@ function verdict(s){
 
   // 1. the hum stopped at the strike — the most diagnostic thing that can happen
   if(s.through && s.through.restrictedAt){
-    say = 'Your hum stopped right at the ball. That is where you tightened up — the sound '
-        + 'is the first thing to go when you grip harder. ' + GOAL;
+    say = 'You lost the hum right at the ball. That is where you tightened up.';
   }
   // 2. it cracked
   else if(s.cracks.length === 1){
-    say = 'Your hum cracked one time, ' + where(s.cracks[0]) + '. '
-        + 'A hum that cracks cannot score above 75, however clean the rest of it was. ' + GOAL;
+    say = 'Cracked once, ' + where(s.cracks[0]) + '. Anything that cracks caps at 75.';
   }
   else if(s.cracks.length > 1){
-    say = 'Your hum cracked ' + s.cracks.length + ' times — the first ' + where(s.cracks[0]) + '. '
-        + 'A hum that cracks cannot score above 75. ' + GOAL;
+    say = 'Cracked ' + s.cracks.length + ' times, the first ' + where(s.cracks[0]) + '. Anything that cracks caps at 75.';
   }
   // 3. it never cracked, so grade the line itself
   else if(s.total >= CAL.bands.ELITE){
     say = (s.through && s.through.survived)
-      ? 'Rock steady, and you carried it straight through the ball. Almost nobody does that.'
-      : 'Rock steady — one line, the whole way through. Almost nobody does that.';
+      ? 'One line the whole way, and it survived the ball.'
+      : 'One line the whole way. Nothing broke.';
   }
   else if(s.total >= CAL.bands.CLEAN){
-    say = 'Solid. You stayed on one note the whole way and never broke it. '
-        + 'Take the wobble out and this is an elite hum.';
+    say = 'Held one note the whole way. The wobble is what is left.';
   }
   else {
     // SHAKY and NEEDS WORK say NOTHING, on purpose.
@@ -842,7 +838,7 @@ function verdict(s){
 
   // Reported, never scored: a straight line that tilts is still a straight line.
   if(!s.cracks.length && Math.abs(s.tilt) > 120)
-    say += ' Your note also ' + (s.tilt>0?'climbed':'dropped') + ' as you went — smooth, but it travelled.';
+    say += ' The note also ' + (s.tilt>0?'climbed':'dropped') + ' as you went.';
 
   return [col[0], col[1], say];
 }
@@ -1096,11 +1092,24 @@ function stop(){
   const voicedPct = frames.length ? frames.filter(f=>f.hz).length/frames.length : 0;
   const rumble = rumbleTrack.length
     ? rumbleTrack.reduce((a,b)=>a+b,0)/rumbleTrack.length : 0;
+  // FRAGMENTATION — caught by the regression suite, not by eye. A track that flips
+  // voiced/unvoiced every frame is 50% voiced (so it survives the voiced test) and the
+  // de-hash median then fills every one-frame gap, leaving a flawless flat line: a
+  // failing microphone scored 100. A real hum is a few LONG runs of pitch; a broken
+  // signal is many tiny ones.
+  const runs=[]; let rn=0;
+  for(const f of frames){ if(f.hz) rn++; else if(rn){ runs.push(rn); rn=0; } }
+  if(rn) runs.push(rn);
+  runs.sort((a,b)=>a-b);
+  const medRun = runs.length ? runs[runs.length>>1]*HOP : 0;
+  const flapping = runs.length > 2 && medRun < 160;
+
   const windy = rumble > 0.55, thin = voicedPct < 0.45;
-  if(s.rough || windy || thin){
+  if(s.rough || windy || thin || flapping){
     document.getElementById('hint').innerHTML =
       '<b style="color:var(--warn)">⚠️ Couldn’t hear that one fairly — go again.</b> ' +
       (windy ? 'Too much wind on the mic. Turn out of the wind, or cup a hand around the phone.'
+       : flapping ? 'The mic kept cutting in and out. Move the phone closer and try again.'
        : thin ? 'I kept losing your note. Hold ONE note and keep it going.'
        : 'Too much background noise. Somewhere quieter, phone closer.') +
       '<br><span style="opacity:.7">I’d rather give you nothing than a wrong number.</span>';
@@ -1187,9 +1196,9 @@ function stop(){
       + '</b>';
   }
   if(through && through.restrictedAt)
-    setSay('You lost your hum right at the ball. That is where you tightened up.');
+    setSay('You lost the hum right at the ball. That is where you tightened up.');
   else if(through && through.survived && !s.cracks.length)
-    setSay('You held the note straight through the ball. That is the one that matters.');
+    setSay('Held it through the ball.');
 
   const cta = document.getElementById('cta');
   if(cta) cta.style.display = '';
@@ -1220,7 +1229,7 @@ if(new URLSearchParams(location.search).has('debug'))
 document.getElementById('share').onclick = async () => {
   const url = 'https://brixton-collab.github.io/hum-meter/';
   const sc = document.getElementById('sc').textContent;
-  const txt = 'I scored ' + sc + ' on the Hum Meter. Bet you crack before the ball 😏';
+  const txt = 'I scored ' + sc + ' on the Hum Meter. See if you can hold yours through the ball.';
   const b = document.getElementById('share');
   // The native share sheet is the whole point on a phone — it puts the link one tap from
   // their group chat, which is where golf bets actually live.

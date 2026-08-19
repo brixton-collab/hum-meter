@@ -255,18 +255,40 @@ function beats(total){
      1. CLARITY  - the detector's own confidence. Wind makes it guess.
      2. VOICED % - wind masks the fundamental, so frames stop resolving at all.
      3. RUMBLE   - wind is overwhelmingly sub-100 Hz energy. A hum is not.        */
-const WIND = { clarity: 0.55, voiced: 0.45, rumble: 0.55 };
+const WIND = { clarity: 0.55, voiced: 0.45, rumble: 0.55, runMs: 160 };
 
 function signalQuality(fr, rumbleRatio){
   const v = fr.filter(f=>f.hz);
   const voiced = fr.length ? v.length/fr.length : 0;
-  const clarity = v.length ? v.reduce((s,f)=>s+f.clarity,0)/v.length : 0;
+  const clarity = v.length ? v.reduce((s,f)=>s+(f.clarity||0),0)/Math.max(v.length,1) : 0;
   const rumble = rumbleRatio == null ? 0 : rumbleRatio;
+
+  /* FRAGMENTATION — the check that catches a failing microphone.
+     Found by the regression suite on 2026-08-18: a track that alternates voiced /
+     unvoiced every single frame scored 100. It is obviously not a hum, but it is 50%
+     voiced (so it passes the voiced test) and the de-hash median then fills every
+     one-frame gap, leaving a flawless flat line. A stranger with a flaky mic would
+     have been handed a perfect score.
+
+     A real hum is a few LONG runs of pitch. A broken signal is many tiny ones. So
+     measure the typical run length: under ~160 ms and it is not a hum, whatever the
+     percentages say.                                                                */
+  const runs = [];
+  let n = 0;
+  for(let i=0;i<fr.length;i++){
+    if(fr[i].hz) n++;
+    else if(n){ runs.push(n); n=0; }
+  }
+  if(n) runs.push(n);
+  runs.sort((a,b)=>a-b);
+  const medRun = runs.length ? runs[runs.length>>1] * HOP : 0;
+
   const fails = [];
   if(clarity < WIND.clarity) fails.push('clarity');
   if(voiced  < WIND.voiced)  fails.push('voiced');
   if(rumble  > WIND.rumble)  fails.push('rumble');
-  return { ok: fails.length === 0, clarity, voiced, rumble, fails };
+  if(runs.length > 2 && medRun < WIND.runMs) fails.push('fragmented');
+  return { ok: fails.length === 0, clarity, voiced, rumble, medRun, fails };
 }
 
 /* ── IMPACT ───────────────────────────────────────────────────────────────────
