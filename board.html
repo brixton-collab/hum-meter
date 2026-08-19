@@ -222,10 +222,12 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
    ═════════════════════════════════════════════════════════════════════════════ */
 
 const CLOUD = {
-  url:  '',      // e.g. https://xxxx.supabase.co/rest/v1
-  key:  '',      // the ANON key. Public by design; row-level security does the work.
+  url:  'https://dbuyjntbpqbimkuewegg.supabase.co/rest/v1',
+  key:  'sb_publishable_BbZCc_Yblqrrc-aV6-5ysQ_ooAkGngs',
   table:'hums'
 };
+// PUBLIC by design - it ships inside the page. Row-level security is what protects
+// the data: add a hum, read the board, attach a strike rating. No deletes, no schema.
 const cloudOn = () => !!(CLOUD.url && CLOUD.key);
 
 /* ── IDENTITY ─────────────────────────────────────────────────────────────────

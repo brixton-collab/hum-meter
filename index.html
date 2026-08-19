@@ -291,7 +291,13 @@ const VIEW_CENTS = 350;
    this is the calibration population, and it is the same table the V2 board uses -
    so nothing recorded from day one is wasted when the board goes live.
    Setup is ~10 minutes: see SETUP-CLOUD.md.                                       */
-const CLOUD = { url:'', key:'', table:'hums' };
+const CLOUD = { url:'https://dbuyjntbpqbimkuewegg.supabase.co/rest/v1',
+                key:'sb_publishable_BbZCc_Yblqrrc-aV6-5ysQ_ooAkGngs',
+                table:'hums' };
+// Publishable key, and it is PUBLIC by design - it ships inside the page. Row-level
+// security is what protects the data: the policies allow adding a hum, reading the
+// board, and attaching a strike rating. No deletes, no schema access, nothing else.
+// (Supabase renamed these from 'anon' to 'publishable' in 2025; same thing.)
 const cloudOn = () => !!(CLOUD.url && CLOUD.key);
 const VISITOR = (()=>{ try{
   let v=localStorage.getItem('humVisitor');
