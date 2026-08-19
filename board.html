@@ -195,6 +195,16 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
       <tbody id="impRows"><tr><td colspan="3" class="hint">—</td></tr></tbody></table>
     </div>
   </section>
+  <!-- THE MICROPHONE ASK, EVERY SINGLE TIME.
+       On iOS, Safari re-asks for the microphone on every new browsing session - it is a
+       privacy decision by Apple, not something a page can turn off. The one real fix is
+       Add to Home Screen: a home-screen web app keeps its permission, and it also opens
+       without a URL bar, which is a better experience for a golfer standing over a ball.
+       Shown quietly, after they have already used it once. -->
+  <p class="foot" id="hsHint" style="display:none">
+    Tired of the microphone prompt? Tap <b>Share</b> → <b>Add to Home Screen</b>.
+    It opens like an app and stops asking.
+  </p>
 </div>
 
 <nav>
@@ -670,6 +680,9 @@ function showResult(s){
       ? s.cracks.map(c => +(c.at - s.impact.frame*H.HOP/1000).toFixed(2)) : null,
     impact_at: s.impact ? +(s.impact.frame*H.HOP/1000).toFixed(2) : null
   };
+  const hs=document.getElementById('hsHint');
+  if(hs && /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.navigator.standalone)
+    hs.style.display='';
   Store.add(pendingHum).then(()=>{ paintMe(); paintAll(); });
   if(document.getElementById('card')) drawShareCard(s);
   buildStrike();

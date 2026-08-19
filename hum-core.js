@@ -19,7 +19,7 @@ const HOP = 40;                       // ms between pitch frames
 const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
 const JUMP_CENTS = 50;                // pitch move that counts as a crack...
 const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
-const CLARITY_MIN = 0.55;             // below this the frame isn't a tone
+const CLARITY_MIN = 0.38;             // below this the frame isn't a tone
 const CLARITY_GATE = 0.45;            // below this the RECORDING is too rough to score
 const OCTAVE_OFF_CENTS = 150;         // this far off the note = wrong octave, not vibrato
 const HUSH_MS = 1400;                 // silence this long after a hum = you're done
@@ -57,7 +57,16 @@ function detect(buf, sr, floor){
   let mean=0; for(let i=0;i<buf.length;i++) mean+=buf[i]; mean/=buf.length;
   let rms=0; for(let i=0;i<buf.length;i++){ buf[i]-=mean; rms+=buf[i]*buf[i]; }
   rms=Math.sqrt(rms/buf.length);
-  if(rms<0.008) return null;                      // silence
+  /* ⚠️ THIS NUMBER DECIDES WHETHER A SOFT HUM EXISTS AT ALL, and it was far too high.
+     At 0.008 a gentle hum with the phone on the ground never reached the pitch detector -
+     the frame was discarded as "silence" before anything looked at it, and no amount of
+     loosening the gates downstream could bring it back. Brixton: "it's not picking up, you
+     should pick up on a soft hum, you have to really do it."
+     0.0010 is still above a phone's own noise floor (~0.0005), so silence is
+     still silence - which matters, because the hands-free stop depends on quiet reading
+     as quiet. Clarity is what rejects noise, and clarity is level-independent: the
+     autocorrelation is normalised, so a quiet hum scores the same as a loud one. */
+  if(rms<0.0010) return null;                     // silence
 
   const lo = Math.max(SR_MIN, floor||SR_MIN);
   const lagMin=Math.floor(sr/SR_MAX), lagMax=Math.min(Math.floor(sr/lo), buf.length-2);

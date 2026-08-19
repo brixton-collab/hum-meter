@@ -166,6 +166,16 @@
     </div>
   </div>
 
+    <!-- THE MICROPHONE ASK, EVERY SINGLE TIME.
+       On iOS, Safari re-asks for the microphone on every new browsing session - it is a
+       privacy decision by Apple, not something a page can turn off. The one real fix is
+       Add to Home Screen: a home-screen web app keeps its permission, and it also opens
+       without a URL bar, which is a better experience for a golfer standing over a ball.
+       Shown quietly, after they have already used it once. -->
+  <p class="foot" id="hsHint" style="display:none">
+    Tired of the microphone prompt? Tap <b>Share</b> → <b>Add to Home Screen</b>.
+    It opens like an app and stops asking.
+  </p>
   <p class="foot">Nothing is uploaded. It all runs on your phone.</p>
 </div>
 
@@ -178,7 +188,10 @@
 const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
 const JUMP_CENTS = 50;                // pitch move that counts as a crack...
 const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
-const CLARITY_MIN = 0.55;             // below this the frame isn't a tone
+const CLARITY_MIN = 0.38;             // below this the frame isn't a tone
+// Lowered from 0.55 (2026-08-19). That was set on clean indoor recordings; a real hum with
+// road noise or wind behind it is a perfectly readable tone that simply correlates less
+// well. "Did it ever hold a note?" is the honest guard against noise, not this.
 const CLARITY_GATE = 0.45;            // below this the RECORDING is too rough to score
 // Lowered from 0.62 on 2026-08-19. It was set on quiet-room recordings, and a phone in a
 // moving car (or a golfer at a windy range) sits well under it while still producing a
@@ -254,7 +267,16 @@ function detect(buf, sr, floor){
   let mean=0; for(let i=0;i<buf.length;i++) mean+=buf[i]; mean/=buf.length;
   let rms=0; for(let i=0;i<buf.length;i++){ buf[i]-=mean; rms+=buf[i]*buf[i]; }
   rms=Math.sqrt(rms/buf.length);
-  if(rms<0.008) return null;                      // silence
+  /* ⚠️ THIS NUMBER DECIDES WHETHER A SOFT HUM EXISTS AT ALL, and it was far too high.
+     At 0.008 a gentle hum with the phone on the ground never reached the pitch detector -
+     the frame was discarded as "silence" before anything looked at it, and no amount of
+     loosening the gates downstream could bring it back. Brixton: "it's not picking up, you
+     should pick up on a soft hum, you have to really do it."
+     0.0010 is still above a phone's own noise floor (~0.0005), so silence is
+     still silence - which matters, because the hands-free stop depends on quiet reading
+     as quiet. Clarity is what rejects noise, and clarity is level-independent: the
+     autocorrelation is normalised, so a quiet hum scores the same as a loud one. */
+  if(rms<0.0010) return null;                     // silence
 
   const lo = Math.max(SR_MIN, floor||SR_MIN);
   const lagMin=Math.floor(sr/SR_MAX), lagMax=Math.min(Math.floor(sr/lo), buf.length-2);
@@ -1026,7 +1048,7 @@ async function start(){
     const bar = document.getElementById('lvlbar');
     bar.style.width = Math.min(100, lv/0.15*100) + '%';
     bar.className = d ? '' : 'hot';
-    quietRun = lv < 0.004 ? quietRun+1 : 0;
+    quietRun = lv < 0.0015 ? quietRun+1 : 0;
     if(quietRun === Math.round(2500/HOP) && !heard){
       document.getElementById('hint').innerHTML =
         '<b style="color:var(--warn)">Not hearing anything.</b> The bar under the graph ' +
@@ -1292,6 +1314,10 @@ function stop(){
       ? 'Noisy recording — that break might be the wind rather than you.'
       : 'Noisy recording, so treat this one as a rough guide.';
   }
+
+  const hs=document.getElementById('hsHint');
+  if(hs && /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.navigator.standalone)
+    hs.style.display='';
 
   const cta = document.getElementById('cta');
   if(cta) cta.style.display = '';
