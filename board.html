@@ -569,6 +569,11 @@ async function start(){
        a little up and down too much for a pretty steady hum." Re-anchored every frame
        from the last two seconds and re-applied across the whole track, so the picture is
        consistent instead of correcting itself halfway through. */
+    /* LOCK THE NOTE ONCE, THEN STOP CHASING IT - see lockNote() in hum-core.js. Chasing
+       it every frame is what let the filter walk into the road outdoors and start
+       amplifying the noise it exists to remove. */
+    /* Display only. `hz` is never touched live - there is no note estimate live that is
+       trustworthy enough to throw a frame away on (see the retune note below). */
     { const recent = H.getFrames().slice(-50).filter(f=>f.hz).map(f=>f.hz);
       if(recent.length >= 10){ const r = H.anchorNote(recent); if(r) refNote = r; }
       if(refNote) for(const fr of H.getFrames()) fr.drawHz = H.foldOctave(fr.hz, refNote); }
@@ -580,12 +585,31 @@ async function start(){
        after the fact before, on a stitched reconstruction; now it runs on the live
        signal, which is what the whole recording is judged on.
        Retuned only on a real change, so an ordinary vibrato does not chase the filter. */
-    if(refNote && Math.abs(1200*Math.log2(refNote/(tunedTo||refNote))) > 80 || (refNote && !tunedTo)){
-      tunedTo = refNote;
-      hp1.frequency.value = Math.max(60, refNote*0.72);
-      hp2.frequency.value = Math.max(60, refNote*0.72);
-      lp1.frequency.value = Math.min(400, refNote*1.55);
-    }
+    /* ⚠️ THE LIVE FILTER IS FIXED AT 90-300 Hz AND MUST STAY THAT WAY.
+
+       A live retune - tightening the band around the note as soon as the note was
+       believed - was added and REMOVED the same day, because it is a positive feedback
+       loop and it destroyed his first outdoor test. Measured on that recording, this is
+       what the note estimate did while he hummed ONE note, road 300 yards away:
+
+           148 -> 90 -> 127 -> 183 -> 216 -> 124 -> 120 -> 90 -> 98 -> 118 -> 85 Hz
+
+       It never settles. Each dip into the 80s pointed the band at 61-140 Hz, which
+       passes road rumble and REJECTS a 148 Hz hum - so the detector read noise, the
+       noise made the next estimate worse, and the estimate moved the band further into
+       the noise. The forest of spikes on his screen was the meter amplifying the exact
+       thing it exists to remove.
+
+       Confidence gating was tried before removal, and the measurement killed it too: on
+       real recordings the frames only agree with their own note about 30% of the time at
+       +/-80 cents and 45% at +/-120. There is no threshold that is loose enough to fire
+       and tight enough to be safe.
+
+       The tight, note-centred pass still happens - at the END, in retrack(), where the
+       whole recording is available, both octaves can be tried, and the result is only
+       adopted if it HEARD MORE. That is the safe place for it, and it already delivers
+       the win: 63% of frames voiced live on his car audio, 77% after the second look.
+       Live detection does not need the extra 14% badly enough to risk the loop.        */
     draw();
 
     /* HANDS-FREE STOP.
@@ -731,7 +755,16 @@ function stop(){
      note, which is the artifact and nothing else. Measured on a synthesised copy of his
      D#3 recording: 65.9 with 12 cracks becomes 100 with 0. */
   { const ref = H.anchorNote(fr.filter(f=>f.hz).map(f=>f.hz));
-    if(ref) fr.forEach(f=>{ if(f.hz) f.hz = H.foldOctave(f.hz, ref); }); }
+    if(ref){
+      fr.forEach(f=>{ if(f.hz) f.hz = H.foldOctave(f.hz, ref); });
+      /* THE ON-NOTE GATE. A hum is ONE note, and now that the recording is finished the
+         note is trustworthy. A frame 400 cents off it is not him cracking - a crack
+         returns to the note within a few frames - it is the detector finding a "pitch"
+         in a passing car. Outdoors that drew a forest of spikes with nothing to do with
+         his voice, and every one was scored as a break in it. Only possible at the END:
+         live, no note estimate is good enough to throw a frame away on. */
+      fr.forEach(f=>{ if(f.hz && !H.onNote(f.hz, ref)) f.hz = 0; });
+    } }
   fr.forEach(f=>{ f.drawHz=f.hz; });
   H.deHash();
 

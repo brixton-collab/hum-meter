@@ -664,6 +664,51 @@ function anchorNote(hzList){
   if(r*2 <= SR_MAX && near(r*2) > near(r)) r *= 2;
   return r;
 }
+/* ── LOCKING THE NOTE, AND WHY CHASING IT IS A FEEDBACK LOOP ──────────────────
+   Brixton, testing outdoors with a road ~300 yards away and light wind: "these are
+   really good hums and they're reading way low, and your graph is fluctuating - it's
+   picking up on other noise, not the hum."
+
+   Measured on that recording, this is what the live filter was locking onto, every
+   three seconds, while he hummed ONE note:
+
+       148 -> 90 -> 127 -> 183 -> 216 -> 124 -> 120 -> 90 -> 98 -> 118 -> 85 Hz
+
+   It never settles. And because the tight band retunes to whatever it last believed,
+   every dip into the 80s and 90s pointed the filter straight at the road: a band of
+   61-140 Hz passes rumble and REJECTS his 148 Hz hum. The detector then reads noise,
+   the noise makes the next estimate worse, and the estimate moves the filter further
+   into the noise. That is a positive feedback loop, and it is what the forest of spikes
+   on his screen actually is - the meter amplifying the thing it was built to remove.
+
+   Three rules come out of it, and the first is the important one:
+
+     1. A golfer hums ONE note per attempt. So LOCK it once and stop chasing. Re-deciding
+        every frame gives the loop somewhere to go; a lock gives it nowhere.
+     2. Only lock when the estimate is actually CONFIDENT - a sustained run of frames
+        that agree with each other - otherwise stay on the safe wide band. An unconfident
+        guess is exactly the one that points at the road.
+     3. NEVER tune the low edge below 105 Hz whatever the estimate says. Hums live at
+        130-160 Hz and road rumble lives underneath; there is no reading of the audio
+        where opening that door is correct.                                             */
+const LOCK_MIN_FRAMES = 25, LOCK_AGREE = 0.70, LOCK_TOL_C = 80, TUNE_FLOOR_HZ = 105;
+function lockNote(hzList){
+  if(!hzList || hzList.length < LOCK_MIN_FRAMES) return 0;
+  const cand = anchorNote(hzList);
+  if(!cand || cand < TUNE_FLOOR_HZ || cand > SR_MAX) return 0;
+  const near = hzList.filter(h=>Math.abs(1200*Math.log2(h/cand)) < LOCK_TOL_C).length;
+  return (near/hzList.length) >= LOCK_AGREE ? cand : 0;
+}
+/* ONCE THE NOTE IS KNOWN, ANYTHING FAR OFF IT IS NOT HIS VOICE. A hum is one note. A
+   frame 400 cents away is not him cracking - a crack returns to the note, and it returns
+   within a few frames. It is the detector finding a "pitch" in a passing car. Marking it
+   unvoiced is honest: we did not hear the hum in that frame. It also stops the line
+   drawing a spike for every truck on the road, which is the thing he can see. */
+const OFF_NOTE_C = 400;
+function onNote(hz, ref){
+  if(!hz || !ref) return hz;
+  return Math.abs(1200*Math.log2(hz/ref)) > OFF_NOTE_C ? 0 : hz;
+}
 function confirmNoteOctave(note){
   for(let lift=0; lift<2; lift++){
     const cand = note*2;
@@ -1314,6 +1359,7 @@ async function start(){
        across the whole track so the picture is consistent rather than fixing itself
        halfway through. Display only: `hz` is untouched and the scorer still does its
        own, evidence-checked octave resolution at the end. */
+    /* Display only - see the retune note below for why `hz` is never touched live. */
     { const recent = frames.slice(-50).filter(f=>f.hz).map(f=>f.hz);
       if(recent.length >= 10){ const r = anchorNote(recent); if(r) refNote = r; }
       if(refNote) for(const fr of frames) fr.drawHz = foldOctave(fr.hz, refNote); }
@@ -1321,12 +1367,31 @@ async function start(){
     /* THE SECOND PASS, LIVE. The fixed 90-300 Hz band is all that can be done before the
        note is known; the moment it IS known, tighten around it. That is the pass that
        does the real work - on his car recording, 63% of frames voiced becomes 77%. */
-    if((refNote && !tunedTo) || (refNote && Math.abs(1200*Math.log2(refNote/(tunedTo||refNote))) > 80)){
-      tunedTo = refNote;
-      hp1.frequency.value = Math.max(60, refNote*0.72);
-      hp2.frequency.value = Math.max(60, refNote*0.72);
-      lp1.frequency.value = Math.min(400, refNote*1.55);
-    }
+    /* ⚠️ THE LIVE FILTER IS FIXED AT 90-300 Hz AND MUST STAY THAT WAY.
+
+       A live retune - tightening the band around the note as soon as the note was
+       believed - was added and REMOVED the same day, because it is a positive feedback
+       loop and it destroyed his first outdoor test. Measured on that recording, this is
+       what the note estimate did while he hummed ONE note, road 300 yards away:
+
+           148 -> 90 -> 127 -> 183 -> 216 -> 124 -> 120 -> 90 -> 98 -> 118 -> 85 Hz
+
+       It never settles. Each dip into the 80s pointed the band at 61-140 Hz, which
+       passes road rumble and REJECTS a 148 Hz hum - so the detector read noise, the
+       noise made the next estimate worse, and the estimate moved the band further into
+       the noise. The forest of spikes on his screen was the meter amplifying the exact
+       thing it exists to remove.
+
+       Confidence gating was tried before removal, and the measurement killed it too: on
+       real recordings the frames only agree with their own note about 30% of the time at
+       +/-80 cents and 45% at +/-120. There is no threshold that is loose enough to fire
+       and tight enough to be safe.
+
+       The tight, note-centred pass still happens - at the END, in retrack(), where the
+       whole recording is available, both octaves can be tried, and the result is only
+       adopted if it HEARD MORE. That is the safe place for it, and it already delivers
+       the win: 63% of frames voiced live on his car audio, 77% after the second look.
+       Live detection does not need the extra 14% badly enough to risk the loop.        */
     // level for the hush, measured AFTER the filter - see the board for why that matters
     { lvlLog.push(lv); if(d) loudRef = Math.max(loudRef*0.997, lv); }
 
@@ -1474,7 +1539,23 @@ function stop(){
      that gap: it moves a frame only when it sits within 50 cents of exactly one or two
      octaves BELOW the confirmed note, which is the artifact and nothing else. */
   { const ref = anchorNote(frames.filter(f=>f.hz).map(f=>f.hz));
-    if(ref) frames.forEach(f=>{ if(f.hz) f.hz = foldOctave(f.hz, ref); }); }
+    if(ref){
+      frames.forEach(f=>{ if(f.hz) f.hz = foldOctave(f.hz, ref); });
+      /* ── THE ON-NOTE GATE ──────────────────────────────────────────────────────
+         A hum is ONE note. Now that the recording is finished and the note has been
+         confirmed against the audio, a frame 400 cents away from it is not him
+         cracking - a crack returns to the note, and it returns within a few frames.
+         It is the detector finding a "pitch" in a passing car, and outdoors it does
+         that constantly: his road test drew a forest of spikes that had nothing to do
+         with his voice, and every one of them was scored as a break in it.
+
+         Marking those frames unvoiced is the honest reading - we did not hear the hum
+         there - and it is the reason this can only be done at the END. Live, there is
+         no note estimate trustworthy enough to throw a frame away on. */
+      let killed = 0;
+      frames.forEach(f=>{ if(f.hz && !onNote(f.hz, ref)){ f.hz = 0; killed++; } });
+      window.__offNote = killed;
+    } }
   frames.forEach(f => { f.drawHz = f.hz; });      // corrected, but NOT de-hashed
   deHash();
 
