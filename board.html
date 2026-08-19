@@ -76,12 +76,15 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
     <div class="card" id="firstrun" style="display:none;border-color:#1e4436;background:#101c18">
       <b style="font-size:15px">Hum through your swing. See where it breaks.</b>
       <ol class="how">
-        <li><b>Phone on the ground</b> next to your ball, screen up.</li>
-        <li><b>Tap start and hum one note</b> — through the backswing, the ball, and
-            your finish. Don’t stop when you hit it.</li>
-        <li><b>Pick it up.</b> It stops on its own when you go quiet.</li>
+        <li>Set your phone on the ground next to your ball, <b>screen up</b>.</li>
+        <li><b>Tap start and make a swing.</b> Hold one steady hum the whole shot —
+            backswing, strike and finish. Don’t stop when you hit it.</li>
+        <li><b>Pick your phone up</b> and see your score. It stops on its own.</li>
       </ol>
-      <div class="hint">Where your hum breaks is where you tighten up. That is the whole thing.</div>
+      <div class="hint" style="border-top:1px solid #1e4436;padding-top:10px;margin-top:4px">
+        <b style="color:var(--ink)">Where your hum breaks is where your tension is.</b>
+        Take the breaks out and the score goes up — that is the whole game.
+      </div>
       <button class="btn" id="firstok" style="margin-top:12px">Got it</button>
     </div>
     <div id="blocker"></div>
@@ -320,6 +323,43 @@ const Store = {
     }catch(e){ return { rows:this.localAll(), local:true }; }
   }
 };
+
+/* ── THE THING THAT SILENTLY KILLS A BIO LINK ────────────────────────────────
+   A link tapped INSIDE Instagram opens in Instagram's own webview, and on iOS that
+   webview refuses microphone access outright. The page loads, the button works, and
+   nothing happens — so it reads as broken rather than as blocked, and the visitor
+   leaves without ever knowing why.
+
+   It is invisible from a desktop test, which is exactly why it has to be handled in
+   code rather than remembered. V1 has carried this since day one; the board did not,
+   and the board is the link about to go in a bio.                                   */
+function inAppBrowser(){
+  const ua = navigator.userAgent || '';
+  return /Instagram|FBAN|FBAV|FB_IAB|Line\/|Twitter|TikTok|Snapchat|LinkedInApp/i.test(ua);
+}
+function insecure(){
+  return !window.isSecureContext && !['localhost','127.0.0.1'].includes(location.hostname);
+}
+function showBlocker(){
+  if(!inAppBrowser() && !insecure()) return false;
+  const url = location.href;
+  document.getElementById('blocker').innerHTML =
+    '<div class="warnbox"><b>Open this in your browser</b>' +
+    (insecure()
+      ? 'This page needs a secure connection to reach the microphone.'
+      : 'You are inside the Instagram browser, and it will not let a web page use your ' +
+        'microphone. Tap the <b>⋯</b> or <b>↗</b> menu at the top of this screen and choose ' +
+        '<b>“Open in browser”</b> — everything works normally there.') +
+    '<div style="margin-top:10px;font-size:12px;word-break:break-all;opacity:.85">' + url + '</div>' +
+    '<button class="btn ghost" id="copyurl" style="margin-top:10px">Copy the link</button></div>';
+  const c = document.getElementById('copyurl');
+  if(c) c.onclick = async () => {
+    try{ await navigator.clipboard.writeText(url); c.textContent='Copied — paste it in Safari'; }
+    catch(e){ c.textContent = url; }
+  };
+  document.getElementById('go').style.display='none';
+  return true;
+}
 
 /* ── AUDIO ────────────────────────────────────────────────────────────────────
    Same pitch pipeline as the live meter (hum-core.js), plus two things the simple
@@ -949,6 +989,7 @@ document.getElementById('firstok').onclick=()=>{
   document.getElementById('firstrun').style.display='none';
 };
 
+showBlocker();          // must run before anything invites them to tap
 renderWho(); fit(); draw(); paintMe(); paintAll();
 </script>
 </body></html>
