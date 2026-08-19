@@ -19,7 +19,7 @@ const HOP = 40;                       // ms between pitch frames
 const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
 const JUMP_CENTS = 50;                // pitch move that counts as a crack...
 const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
-const CLARITY_MIN = 0.38;             // below this the frame isn't a tone
+const CLARITY_MIN = 0.52;             // below this the frame isn't a tone
 const CLARITY_GATE = 0.45;            // below this the RECORDING is too rough to score
 const OCTAVE_OFF_CENTS = 150;         // this far off the note = wrong octave, not vibrato
 const HUSH_MS = 1400;                 // silence this long after a hum = you're done

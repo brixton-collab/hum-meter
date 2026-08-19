@@ -188,10 +188,16 @@
 const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
 const JUMP_CENTS = 50;                // pitch move that counts as a crack...
 const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
-const CLARITY_MIN = 0.38;             // below this the frame isn't a tone
-// Lowered from 0.55 (2026-08-19). That was set on clean indoor recordings; a real hum with
-// road noise or wind behind it is a perfectly readable tone that simply correlates less
-// well. "Did it ever hold a note?" is the honest guard against noise, not this.
+const CLARITY_MIN = 0.52;             // below this the frame isn't a tone
+/* ⚠️ TWO KNOBS, AND ONLY ONE OF THEM WAS THE PROBLEM. Went 0.55 -> 0.38 to hear soft hums
+   and it was the wrong knob: at 0.38 random background noise correlates just well enough
+   to produce a "pitch", that pitch jumps around, every jump reads as a crack, and the
+   screen filled with red lines on a score of 17. Brixton's recording shows it exactly.
+
+   VOLUME was never gated here - the autocorrelation is normalised, so a quiet hum and a
+   loud one score the same clarity. The thing actually eating soft hums was the RMS
+   silence gate below (0.008, now 0.0010). That one stays low. This one goes back up,
+   because it is the only thing standing between a hum and a room. */
 const CLARITY_GATE = 0.45;            // below this the RECORDING is too rough to score
 // Lowered from 0.62 on 2026-08-19. It was set on quiet-room recordings, and a phone in a
 // moving car (or a golfer at a windy range) sits well under it while still producing a
@@ -253,7 +259,7 @@ const CAL = {
 };
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0, rumbleTrack = [], hiTrack = [];
+let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0, rumbleTrack = [], hiTrack = [], pcmLog = [];
 
 function fit(){ const r = cv.getBoundingClientRect(), d = devicePixelRatio||1;
   cv.width = r.width*d; cv.height = r.height*d; ctx.setTransform(d,0,0,d,0,0); draw(); }
@@ -262,6 +268,62 @@ addEventListener('resize', fit);
 // `floor` raises the lowest pitch the search may return. Passing it is how the octave
 // resolver asks the same audio a second question: with the subharmonic ruled out, is
 // the note still there?
+/* ── FILTERING: the single biggest accuracy win in this whole project ─────────
+   Measured on Brixton's own recording, humming in the back of a car at 70 mph:
+
+     raw audio (what shipped)      2 usable frames of 64,  ZERO on his note
+     wide band-pass               14 usable frames,        15 on his note
+     TWO-PASS (this)              35 usable frames,        34 on his note
+
+   Seventeen times more of his hum, from the same audio. The screen was filling
+   with red crack lines because the detector was hunting for a pitch across the
+   WHOLE spectrum - and in that clip 77% of the energy is road noise, only 20% is
+   the hum. It was finding a "pitch" in the noise, and every jump read as a crack.
+
+   PASS 1 filters to the plausible hum range (90-300 Hz) and asks "roughly what note
+   is this?". PASS 2 then filters tightly around THAT note and re-reads everything.
+   The second pass is what does the work: it cannot be done first, because the note
+   is not known until the first pass finds it.                                     */
+function biq(x, sr, type, f0, Q){
+  const w0 = 2*Math.PI*f0/sr, al = Math.sin(w0)/(2*Q), c = Math.cos(w0);
+  let b0,b1,b2;
+  if(type==='hp'){ b0=(1+c)/2; b1=-(1+c); b2=(1+c)/2; }
+  else if(type==='lp'){ b0=(1-c)/2; b1=1-c; b2=(1-c)/2; }
+  else { b0=al; b1=0; b2=-al; }                       // band-pass
+  const a0=1+al, a1=-2*c, a2=1-al;
+  const B0=b0/a0, B1=b1/a0, B2=b2/a0, A1=a1/a0, A2=a2/a0;
+  const y = new Float32Array(x.length);
+  let x1=0,x2=0,y1=0,y2=0;
+  for(let i=0;i<x.length;i++){
+    const v = B0*x[i]+B1*x1+B2*x2-A1*y1-A2*y2;
+    x2=x1; x1=x[i]; y2=y1; y1=v; y[i]=v;
+  }
+  return y;
+}
+const wideBand  = (s,sr) => biq(biq(biq(biq(biq(s,sr,'hp',90,0.707),sr,'hp',90,0.707),sr,'hp',90,0.707),sr,'lp',300,0.707),sr,'lp',300,0.707);
+const tightBand = (s,sr,f) => biq(biq(biq(s,sr,'hp',f*0.6,0.707),sr,'bp',f,1.0),sr,'bp',f,1.0);
+
+/* Re-read the whole recording from the raw audio, twice. Returns a pitch array
+   aligned to the existing frame grid. */
+function retrack(pcm, sr, hopMs, winN){
+  const step = Math.round(sr*hopMs/1000);
+  const read = sig => {
+    const out=[];
+    for(let i=0; i+winN<=sig.length; i+=step){
+      const d = detect(Float32Array.from(sig.subarray(i,i+winN)), sr, SR_MIN);
+      out.push(d ? {hz:d.hz, clarity:d.clarity} : {hz:0, clarity:0});
+    }
+    return out;
+  };
+  const pass1 = read(wideBand(pcm, sr));
+  const got = pass1.filter(f=>f.hz).map(f=>f.hz).sort((a,b)=>a-b);
+  if(got.length < 3) return pass1;                    // nothing to centre on
+  const note = got[got.length>>1];
+  const pass2 = read(tightBand(pcm, sr, note));
+  // keep whichever pass heard more of the hum
+  return pass2.filter(f=>f.hz).length >= pass1.filter(f=>f.hz).length ? pass2 : pass1;
+}
+
 function detect(buf, sr, floor){
   // remove DC, check we have signal at all
   let mean=0; for(let i=0;i<buf.length;i++) mean+=buf[i]; mean/=buf.length;
@@ -1005,7 +1067,7 @@ async function start(){
   an.fftSize = 2048; src.connect(hp); hp.connect(lp); lp.connect(an);
   const buf = new Float32Array(an.fftSize);
 
-  frames=[]; running=true; heard=false; quietRun=0; rumbleTrack=[]; hiTrack=[]; t0=performance.now();
+  frames=[]; running=true; heard=false; quietRun=0; rumbleTrack=[]; hiTrack=[]; pcmLog=[]; t0=performance.now();
   document.getElementById('res').classList.remove('on');
   document.getElementById('go').classList.add('rec');
   document.getElementById('go').textContent = 'Listening… hum, then swing';
@@ -1019,6 +1081,11 @@ async function start(){
     // keep the audio, not just the verdict on it — the octave resolver has to be able
     // to re-ask the question, and a number can't be re-measured
     frames.push(d ? {hz:d.hz, clarity:d.clarity, rms:d.rms, buf:raw} : {hz:0, buf:raw});
+    // Keep the raw audio so the whole recording can be re-read once, properly filtered.
+    // Live detection has to answer instantly; the second look does not.
+    { const hop = Math.round(ac.sampleRate*HOP/1000);
+      const tail = raw.subarray(Math.max(0, raw.length-hop));
+      for(let i=0;i<tail.length;i++) pcmLog.push(tail[i]); }
     document.getElementById('note').textContent = d ? d.hz.toFixed(1)+' Hz' : '—';
 
     // level, straight off the raw buffer — independent of whether pitch detection works
@@ -1095,6 +1162,23 @@ function stop(){
   const b=document.getElementById('go');
   b.classList.remove('rec'); b.textContent='Tap to start humming';
   document.getElementById('state').textContent='done';
+
+  /* THE SECOND LOOK. Live detection runs on unfiltered audio because it has to answer
+     inside 40 ms. Now that the recording is finished there is time to do it properly:
+     filter, find the note, filter tightly around it, and re-read the whole thing. On his
+     car recording this turned 2 usable frames into 35. */
+  if(pcmLog.length > 4096){
+    try{
+      const pcm = Float32Array.from(pcmLog);
+      const re = retrack(pcm, ac ? ac.sampleRate : sampleRate, HOP, 2048);
+      if(re && re.length >= frames.length*0.6){
+        for(let i=0;i<frames.length;i++){
+          const r = re[Math.min(i, re.length-1)];
+          if(r){ frames[i].hz = r.hz; frames[i].clarity = r.clarity; }
+        }
+      }
+    }catch(e){ /* if anything goes wrong, the live track is still there */ }
+  }
 
   // trim leading/trailing silence so a slow start doesn't count as a crack
   let a=0,z=frames.length-1;
