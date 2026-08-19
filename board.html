@@ -735,7 +735,7 @@ function stop(){
   fr.forEach(f=>{ f.drawHz=f.hz; });
   H.deHash();
 
-  const s = H.score();
+  const s = H.score(loBand);   // loBand is the per-frame rumble - see the wind filter
   if(!s){ document.getElementById('live').textContent='Not enough of a hum to score.'; return; }
 
   // Impact is a LANDMARK, not the end of the hum. He hums through the strike; when

@@ -196,10 +196,41 @@ function isolate(fr){
   if((end-start)*HOP < ISO_MIN_MS) return [0, fr.length];
   return [start, end+1];
 }
-function score(){
+function score(rumble){
   const [i0,i1] = isolate(frames);
   const hum = frames.slice(i0,i1);
-  const first = hum.findIndex(f=>f.hz), last = hum.length-1-[...hum].reverse().findIndex(f=>f.hz);
+  /* ⚠️ THE SPAN MUST START AT A REAL HUM, NOT AT THE FIRST FRAME THAT READS AS PITCH.
+
+     This used to be findIndex(f=>f.hz) - the very first voiced frame anywhere - and that
+     was survivable only while the detector was deaf. Now that the live audio is filtered
+     and the clarity bar for filtered audio is 0.36, the QUIET LEAD-IN is no longer
+     silent: a tight band-pass around his note turns ordinary room and road noise into
+     the occasional voiced frame. One of those, seconds before he starts, drags the span
+     back to include all the silence in between - and `total` is the share of the SPAN
+     spent on his line, so a hum that fills half the window can score half of what it
+     deserves before the crack multiplier has even been applied.
+
+     Measured on his own board recording: the hum occupied a little over half the plot,
+     the rest was lead-in, and it scored 35 for a hum he called 65-70.
+
+     So an onset is a RUN, not a frame: 200 ms of continuous pitch is a voice starting.
+     A single frame is noise, and noise is what the lead-in is made of. */
+  const ONSET = Math.max(2, Math.round(200/HOP));
+  const runStart = (arr, dir) => {
+    const idx = dir>0 ? arr.map((_,i)=>i) : arr.map((_,i)=>arr.length-1-i);
+    let run = 0;
+    for(const i of idx){
+      if(arr[i].hz){ run++; if(run >= ONSET) return dir>0 ? i-run+1 : i+run-1; }
+      else run = 0;
+    }
+    return -1;
+  };
+  let first = runStart(hum, 1), last = runStart(hum, -1);
+  // if nothing ever sustained, fall back to the old behaviour rather than refuse
+  if(first < 0 || last < 0){
+    first = hum.findIndex(f=>f.hz);
+    last  = hum.length-1-[...hum].reverse().findIndex(f=>f.hz);
+  }
   if(first < 0 || last-first < 20) return null;
   const span = hum.slice(first, last+1);              // trim lead-in / tail silence
   const voiced = span.map(f=>!!f.hz);
@@ -245,21 +276,61 @@ function score(){
   // CRACKS: an audible break. The last 150 ms is exempt - on a swing hum that is impact,
   // and impact is the strike, not a crack.
   const guard = span.length - Math.round(CRACK_TAIL_MS/HOP);
+  /* A HEAD GUARD, symmetric with the tail one. The tail was exempt because on a swing
+     hum the last 150 ms is impact, and impact is the strike rather than a crack. The
+     same argument applies at the front and was simply never made: the first 150 ms is
+     the voice ARRIVING - pitch is unsettled there by definition, and the filter is still
+     ringing up - so a "crack" in it is the recording starting, not the golfer cracking. */
+  const headGuard = Math.round(CRACK_TAIL_MS/HOP);
   const cracks=[];
   for(let i=0;i<span.length;){
     if(devSpan[i]!==null && devSpan[i]>CRACK_JUMP_C){
       let j=i, mx=0;
       while(j<span.length && devSpan[j]!==null && devSpan[j]>CRACK_JUMP_C){ mx=Math.max(mx,devSpan[j]); j++; }
-      if((j-i)*HOP>=CRACK_JUMP_MS && i<guard)
+      if((j-i)*HOP>=CRACK_JUMP_MS && i<guard && i>=headGuard)
         cracks.push({kind:'jump', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:Math.round(mx)});
       i=j;
     } else if(!voiced[i]){
       let j=i; while(j<span.length && !voiced[j]) j++;
-      if((j-i)*HOP>=CRACK_DROP_MS && i>3 && i<guard)
+      if((j-i)*HOP>=CRACK_DROP_MS && i>=headGuard && i<guard)
         cracks.push({kind:'drop', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:0});
       i=j;
     } else i++;
   }
+  /* ── THE WIND FILTER ──────────────────────────────────────────────────────────
+     Brixton: "build in your wind filter."
+
+     A gust does not make a golfer's hum crack - it makes the DETECTOR crack. The gust
+     lands, the fundamental is masked for a few frames, the track drops out, and the
+     scorer books it as a break in the voice. Measured on the synthetic wind suite that
+     is worth up to 9 points on a swing hum, and it is invisible: he would never know a
+     number was wrong, which makes it worse than a refusal he can argue with.
+
+     Refusing the whole recording was the old answer and it is the wrong one - his rule
+     is ALWAYS SCORE IT, and a 25 mph gale still scores a clean hum 100. So attribute
+     instead of refuse: a crack that lands ON a rumble spike is not his, so it does not
+     count against him and it does not trigger the cap. It is still reported, as wind.
+
+     The threshold is the 90th PERCENTILE of rumble, not the mean, because wind is peaky
+     by nature and the mean is dominated by the calm between gusts - clean audio tops out
+     around 0.32 and anything genuinely windy is 0.46+. */
+  let windCracks = 0;
+  if(rumble && rumble.length){
+    const r = [...rumble].filter(x=>x!=null).sort((a,b)=>a-b);
+    const p90 = r.length ? r[Math.min(r.length-1, Math.round(0.90*(r.length-1)))] : 0;
+    if(p90 > 0.46){
+      const base = i0 + first;                       // span index -> frames index
+      const gusty = i => { const v = rumble[base + i]; return v != null && v >= p90; };
+      const kept = cracks.filter(c=>{
+        const a = Math.round(c.at*1000/HOP), b = a + Math.round(c.ms/HOP);
+        for(let i=a;i<=b;i++) if(gusty(i)) return false;   // a gust sat on it - not his
+        return true;
+      });
+      windCracks = cracks.length - kept.length;
+      cracks.length = 0; kept.forEach(c=>cracks.push(c));
+    }
+  }
+
   // THE CRACK RULE, and the fix to it.
   // Brixton: "if the hum cracks, the score has to be definitely below 75."
   // A flat ceiling did that — and piled every cracked hum onto exactly 74.9, so a badly
@@ -275,7 +346,7 @@ function score(){
   // were pushed without a clarity value. One undefined turns the whole average into NaN,
   // which is what put "NaN" on screen where a percentage should be.
   const clar = span.filter(f=>f.hz).reduce((s,f)=>s+(f.clarity||0),0)/Math.max(vh.length,1);
-  return { total: Math.round(finalTotal*10)/10, line, onAir, tension, tilt, note, cracks, capped,
+  return { total: Math.round(finalTotal*10)/10, line, onAir, tension, tilt, note, cracks, capped, windCracks,
            humStart: i0+first, humWindow: [i0*HOP/1000, i1*HOP/1000],
            jitter: median(dev)*1.4826, held:(vh.length*HOP)/1000,
            span:(span.length*HOP)/1000, purity: clar, rough: clar < CLARITY_GATE };
