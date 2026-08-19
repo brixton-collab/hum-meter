@@ -47,6 +47,9 @@ tr.me td{background:#10241d}
    to be really too hard." He is rating a shot he just hit, phone in one hand, club in
    the other - if it takes a scroll and a hunt it does not get tapped, and an untapped
    rating is a missing row in the only dataset that matters. */
+.skey{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:8px;
+  color:var(--dim);font-size:12px}
+.skey b{color:var(--ink);display:inline-block;min-width:16px}
 .strike{display:flex;gap:3px;margin-top:10px}
 .strike button{flex:1 1 0;min-width:0;padding:14px 0;border-radius:8px;background:#0f1620;
   border:1px solid var(--line);font-weight:700;font-size:15px;line-height:1}
@@ -108,8 +111,11 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
              10 perfectly flush. The anchors matter more than the buttons - "7 or 8?"
              is unanswerable without them, and an unanswerable question gets skipped,
              and a skipped rating is a missing row in the only dataset that matters. -->
-        <div class="hint" style="margin-top:2px;font-size:12px">
-          0 terrible · under 5 fat · 8 good · 10 flush
+        <div class="skey">
+          <span><b>0</b> absolutely terrible</span>
+          <span><b>5</b> 20 yards fat</span>
+          <span><b>8</b> pretty solid</span>
+          <span><b>10</b> perfectly flush</span>
         </div>
         <div class="strike" id="strike"></div>
         <div class="hint" id="strikeDone" style="margin-top:8px;display:none"></div>
@@ -146,8 +152,8 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
     </div>
     <div class="card">
       <b style="font-size:13px">Your last 10</b>
-      <table style="margin-top:8px"><thead><tr><th>When</th><th>Score</th><th>Note</th><th>Cracks</th><th>Strike</th></tr></thead>
-      <tbody id="myRows"><tr><td colspan="5" class="hint">No hums yet.</td></tr></tbody></table>
+      <table style="margin-top:8px"><thead><tr><th>When</th><th>Score</th><th>Cracks</th><th>Strike</th></tr></thead>
+      <tbody id="myRows"><tr><td colspan="4" class="hint">No hums yet.</td></tr></tbody></table>
     </div>
     <div class="card" id="strikeCard">
       <b style="font-size:13px">Does a better hum mean a better strike?</b>
@@ -377,7 +383,13 @@ async function start(){
        The threshold is HUSH_MS = 1400 ms and it must not go lower: the hum often pauses
        AT the strike, and that pause is the tension being measured. At 900 ms the
        recorder stopped during the pause and threw the follow-through away. */
-    const HUSH_MS = 1400;
+    /* 1800 ms, raised from 1400. A crack IS a silence - the voice cuts out for a
+       moment, which is exactly the event being measured - so the hush window has to be
+       comfortably longer than the longest real break. Measured on his own reference
+       recordings, breath holds run to 810 ms; a bad crack is longer still. Stop too
+       eagerly and the recorder ends mid-crack and throws away the follow-through, which
+       is the half that answers the question. */
+    const HUSH_MS = 1800;
     if(!heard && d) heard = true;
     if(heard){
       const need = Math.round(HUSH_MS/H.HOP);
@@ -639,7 +651,7 @@ function paintMe(){
     const when=new Date(r.at); 
     tr.innerHTML='<td>'+when.toLocaleDateString(undefined,{month:'short',day:'numeric'})+
       ' '+when.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})+'</td>'+
-      '<td><b>'+r.score.toFixed(0)+'</b></td><td>'+(r.note_name||'—')+'</td>'+
+      '<td><b>'+r.score.toFixed(0)+'</b></td>'+
       '<td>'+(r.cracks||0)+'</td><td>'+(r.strike==null?'—':r.strike)+'</td>';
     tb.appendChild(tr);
   });
