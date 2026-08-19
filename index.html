@@ -1017,6 +1017,25 @@ function score(rumble, level){
 
      So the span stays the span. If a better discriminator between "he stopped" and "we
      went deaf" turns up, this is where it goes - but it has to survive SWING121. */
+  /* ⚠️ FORGIVING SHORT GAPS IN THE DENOMINATOR: TRIED TWICE, REVERTED TWICE.
+
+     The pull is real. Walking his phone a few feet away drops the share of frames that
+     resolve a pitch from 98% to 64%, and `total` is the share of the SPAN spent on his
+     line - so a third of it is lost before scoring begins, and the same hum reads 96 on
+     the phone and 33 at three feet. He is right that both should be over 90.
+
+     Both attempts to fix it here died on the same clip. Deciding by LEVEL (band still
+     loud = we went deaf) forgave a swing hum stopping at the ball, because a strike is
+     loud: SWING121 68 -> 89 against his "60s ish". Deciding by LENGTH (gaps under 200 ms
+     are ours) forgave it too - his real breaks are made of short gaps: SWING121 -> 88.5,
+     out of band. There is no boundary here that separates "we could not hear him" from
+     "he stopped" without also excusing the restriction the meter exists to find.
+
+     Which means this is not a scoring problem. At three feet the front end resolves 64%
+     of frames, 25% of those are off-note and 10% are a clean octave out. Fix the
+     DETECTION and the denominator stops mattering; patch the denominator and SWING121
+     breaks every time. (YIN was tried for the detection side and did not move the
+     distance numbers either - see the git history for that build.) */
   const onLine = devSpan.map(d=>d!==null && d<=TOL_CENTS);
   const total  = onLine.filter(Boolean).length / span.length * 100;
   const line   = dev.filter(d=>d<=TOL_CENTS).length / dev.length * 100;
