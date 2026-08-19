@@ -1033,12 +1033,29 @@ async function start(){
     // with someone walking over to their phone has a swing's worth of silence and
     // footsteps welded onto the end of it. So: once a hum has actually started, going
     // quiet for HUSH_MS ends it. Tap once, hum, swing, look down at the score.
-    if(!heard && d) heard = true;
+    const ARM_MS = 500;
+    /* WHAT ARMS THE STOP, and why it is not "any pitch".
+       Brixton: "if I put the phone down and make a swing five seconds later, you're
+       telling me you're not gonna pick up on that."
+
+       The stop only arms once a hum has been HEARD, so silence before the swing is
+       fine. But it used to arm on a SINGLE 40 ms frame - a grunt, a word, a scrape, a
+       gust, anything that reads as pitch for one frame - and then 1.8 s later it
+       stopped, before he had even taken the club back. So it now takes ~0.5 s of
+       actual pitch to count as a hum starting. Noise cannot arm it; a hum can.        */
+    if(!heard){
+      const need = Math.round(ARM_MS/HOP);
+      const recent = frames.slice(-need);
+      if(recent.length >= need && recent.filter(f=>f.hz).length >= need-1) heard = true;
+    }
     if(heard){
       const quiet = frames.slice(-Math.round(HUSH_MS/HOP));
       if(quiet.length >= Math.round(HUSH_MS/HOP) && quiet.every(f=>!f.hz)) return stop();
     }
-    if((performance.now()-t0) > 15000) stop();     // hard cap
+    /* 45 s, not 15. The clock starts at the TAP, and the real sequence is tap, phone in
+       the grass, walk to the ball, set up, swing - fifteen seconds cut that off
+       mid-swing. Once a hum is heard the hush rule ends it in under two seconds anyway. */
+    if((performance.now()-t0) > 45000) stop();
   }, HOP);
 }
 
