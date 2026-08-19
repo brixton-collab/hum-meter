@@ -82,7 +82,13 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
       </div>
       <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
         <b style="font-size:13px">How was that strike?</b>
-        <div class="hint" style="margin-top:2px">0 = topped it · 10 = flushed it</div>
+        <!-- His scale, verbatim: 0 terrible, under 5 fat, 8 a pretty good strike,
+             10 perfectly flush. The anchors matter more than the buttons - "7 or 8?"
+             is unanswerable without them, and an unanswerable question gets skipped,
+             and a skipped rating is a missing row in the only dataset that matters. -->
+        <div class="hint" style="margin-top:2px">
+          <b>0</b> terrible · <b>under 5</b> fat · <b>8</b> a good one · <b>10</b> perfectly flush
+        </div>
         <div class="strike" id="strike"></div>
         <div class="hint" id="strikeDone" style="margin-top:8px;display:none"></div>
       </div>
@@ -522,8 +528,12 @@ function showResult(s){
 function buildStrike(){
   const wrap=document.getElementById('strike'); wrap.innerHTML='';
   document.getElementById('strikeDone').style.display='none';
+  const ANCHOR={0:'terrible',3:'fat',5:'fat',8:'good',10:'flush'};
   for(let i=0;i<=10;i++){
-    const b=document.createElement('button'); b.textContent=i;
+    const b=document.createElement('button');
+    b.innerHTML = i + (ANCHOR[i] ? '<span style="display:block;font-size:9px;font-weight:600;opacity:.6;letter-spacing:.04em">'+ANCHOR[i]+'</span>' : '');
+    if(i<5) b.style.borderColor='#4a2828';
+    if(i>=8) b.style.borderColor='#1e4436';
     b.onclick=()=>{
       [...wrap.children].forEach(c=>c.classList.remove('sel'));
       b.classList.add('sel');
