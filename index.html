@@ -644,7 +644,7 @@ function robustNote(hz){
    from the reference and 1200 from half of it, so it can never be touched. Vibrato, a
    glide, a real crack - none of them land within 50 cents of exactly one or two octaves
    down. Only the artifact does, which is the whole point of anchoring it.            */
-const FOLD_CENTS = 50;
+const FOLD_CENTS = 50, FOLD_MAX_FRAMES = 2;
 function foldOctave(hz, ref){
   if(!hz || !ref) return hz;
   for(let k=1;k<=2;k++){
@@ -652,6 +652,33 @@ function foldOctave(hz, ref){
     if(up <= SR_MAX*1.05 && Math.abs(1200*Math.log2(up/ref)) < FOLD_CENTS) return up;
   }
   return hz;
+}
+/* ⚠️ HOW LONG THE DIP LASTS IS WHAT SEPARATES AN ARTIFACT FROM A BREAKING VOICE, and
+   without that test the fold quietly erases the thing it is meant to leave alone.
+
+   An octave drop has two completely different causes. On a steady hum it is the tracker
+   losing the fundamental for a frame or two on a breathy patch - an artifact, and folding
+   it is why his perfect hum draws perfect. But when a voice actually BREAKS it also drops
+   toward the subharmonic, and that one is the measurement, not an error in it.
+
+   Measured: folding every octave dip regardless of length took REF3 - the recording he
+   graded "the hum is lost" - to 85 with ZERO cracks, because every one of its drops got
+   folded back onto the note and stopped being an excursion at all. The fold had deleted
+   his verdict.
+
+   A tracker artifact is brief. A voice coming apart is not. So fold runs of up to two
+   frames (80 ms) and leave anything longer exactly where it is. */
+function foldRun(fr, ref){
+  if(!ref) return;
+  const isOff = f => f.hz && Math.abs(1200*Math.log2(foldOctave(f.hz,ref)/f.hz)) > 1;
+  let i=0;
+  while(i<fr.length){
+    if(!isOff(fr[i])){ i++; continue; }
+    let j=i; while(j<fr.length && isOff(fr[j])) j++;
+    if(j-i <= FOLD_MAX_FRAMES)
+      for(let k=i;k<j;k++) fr[k].hz = foldOctave(fr[k].hz, ref);
+    i=j;
+  }
 }
 /* The reference the fold is anchored to. robustNote is already octave-aware, but on a
    track where enough frames have halved it can still settle on the low one - so try the
@@ -1622,6 +1649,13 @@ function stop(){
      octaves BELOW the confirmed note, which is the artifact and nothing else. */
   { const ref = anchorNote(frames.filter(f=>f.hz).map(f=>f.hz));
     if(ref){
+      /* ⚠️ A LENGTH LIMIT ON THE FOLD (fold dips of <=2 frames, leave longer ones as the
+         voice genuinely breaking) was written, measured and NOT taken. The reasoning is
+         sound - a tracker artifact is brief, a voice coming apart is not - but on this
+         corpus it folded ZERO frames on REF3 and moved the worst noise drop the wrong
+         way, 33.0 to 33.7. No measured benefit, so it does not ship. `foldRun` is left
+         in hum-core.js for the next attempt; the corpus needs a clip where a real break
+         lands on an octave before this can be judged. */
       frames.forEach(f=>{ if(f.hz) f.hz = foldOctave(f.hz, ref); });
       /* ── THE ON-NOTE GATE ──────────────────────────────────────────────────────
          A hum is ONE note. Now that the recording is finished and the note has been

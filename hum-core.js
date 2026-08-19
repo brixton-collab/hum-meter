@@ -48,7 +48,7 @@ const TOL_CENTS = 25, TREND_MS = 200, HOLD_MIN_MS = 50, GASP_CENTS = 100, GASP_G
 const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 100,
       CRACK_DROP_MS = 100, CRACK_TAIL_MS = 150;
 const ISO_NEAR_C = 150, ISO_ON_FRAC = 0.40, ISO_MAX_GAP_MS = 1200, ISO_MIN_MS = 700;
-const FOLD_CENTS = 50;
+const FOLD_CENTS = 50, FOLD_MAX_FRAMES = 2;
 const LOCK_MIN_FRAMES = 25, LOCK_AGREE = 0.70, LOCK_TOL_C = 80, TUNE_FLOOR_HZ = 105;
 const OFF_NOTE_C = 400;
 const median=a=>{ const s=[...a].sort((x,y)=>x-y); const m=s.length>>1;
@@ -119,6 +119,18 @@ function foldOctave(hz, ref){
     if(up <= SR_MAX*1.05 && Math.abs(1200*Math.log2(up/ref)) < FOLD_CENTS) return up;
   }
   return hz;
+}
+function foldRun(fr, ref){
+  if(!ref) return;
+  const isOff = f => f.hz && Math.abs(1200*Math.log2(foldOctave(f.hz,ref)/f.hz)) > 1;
+  let i=0;
+  while(i<fr.length){
+    if(!isOff(fr[i])){ i++; continue; }
+    let j=i; while(j<fr.length && isOff(fr[j])) j++;
+    if(j-i <= FOLD_MAX_FRAMES)
+      for(let k=i;k<j;k++) fr[k].hz = foldOctave(fr[k].hz, ref);
+    i=j;
+  }
 }
 function anchorNote(hzList){
   if(!hzList || hzList.length < 6) return 0;
@@ -600,7 +612,7 @@ function throughImpact(fr, impactFrame, windowMs){
 
 window.HUM = { setFrames, getFrames, HOP, SR_MIN, SR_MAX, VIEW_CENTS, NOTE_NAMES,
                TOL_CENTS, CRACK_CAP, CAL, CLARITY_GATE, CLARITY_FILTERED,
-               median, sd, detect, noteOf, robustNote, foldOctave, anchorNote, lockNote, onNote, TUNE_FLOOR_HZ, confirmNoteOctave,
+               median, sd, detect, noteOf, robustNote, foldOctave, foldRun, anchorNote, lockNote, onNote, TUNE_FLOOR_HZ, confirmNoteOctave,
                resolveOctaves, deHash, isolate, score, beats,
                signalQuality, gustSuspect, findImpact, throughImpact, WIND };
 
