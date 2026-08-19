@@ -188,7 +188,31 @@
 const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
 const JUMP_CENTS = 50;                // pitch move that counts as a crack...
 const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
-const CLARITY_MIN = 0.52;             // below this the frame isn't a tone
+/* ⚠️ TWO CLARITY BARS, AND WHICH ONE APPLIES DEPENDS ENTIRELY ON WHETHER THE AUDIO
+   REACHING THE DETECTOR HAS BEEN FILTERED. They are one decision, not two, and the
+   pair exists because collapsing them into a single number breaks something either
+   way. Lowering the bar GLOBALLY was tried first and the wind suite caught it inside a
+   minute: 4 wrong numbers reported on raw synthetic audio, which is precisely what the
+   note that used to sit here warned about, and it was right at the time: "don't drop CLARITY_MIN to fix loudness - 0.38 is what made noise read
+   as pitch." On RAW audio that is true: lowering the bar just lets the detector find
+   a "pitch" in road rumble. So RAW audio keeps 0.52. Filtered audio gets 0.36, because
+   the filter has already removed the thing that used to fake a pitch.
+
+   Measured on Brixton's own car recordings, after the tight band-pass, and on brown
+   noise with no voice in it at all (which must never read as a held note):
+
+     clarity   his car hum          brown noise
+      0.52     42% voiced, 280 ms    27%, 120 ms      <- he was REFUSED here. 400 ms needed.
+      0.44     69% voiced, 360 ms    36%, 160 ms
+      0.36     75% voiced, 440 ms    62%, 200 ms      <- he passes, noise still cannot hold a note
+      0.28     92% voiced, 760 ms    80%, 320 ms
+
+   0.36 is the first value where a real hum in a car clears the 400 ms "did it ever hold
+   a note" gate, and brown noise is still nowhere near it, so the gate keeps its meaning.
+   Re-run clarity-sweep.js before changing either number, and NEVER hand CLARITY_FILTERED
+   to a detect() call whose audio has not actually been through the filter. */
+const CLARITY_MIN = 0.52;             // below this the frame isn't a tone (RAW audio)
+const CLARITY_FILTERED = 0.36;        // ...and this is the bar once the audio IS filtered
 /* ⚠️ TWO KNOBS, AND ONLY ONE OF THEM WAS THE PROBLEM. Went 0.55 -> 0.38 to hear soft hums
    and it was the wrong knob: at 0.38 random background noise correlates just well enough
    to produce a "pitch", that pitch jumps around, every jump reads as a crack, and the
@@ -259,7 +283,7 @@ const CAL = {
 };
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0, rumbleTrack = [], hiTrack = [], pcmLog = [], refNote = 0;
+let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0, rumbleTrack = [], hiTrack = [], pcmLog = [], refNote = 0, tunedTo = 0, hp1, hp2, lp1, lvlLog = [], loudRef = 0;
 
 function fit(){ const r = cv.getBoundingClientRect(), d = devicePixelRatio||1;
   cv.width = r.width*d; cv.height = r.height*d; ctx.setTransform(d,0,0,d,0,0); draw(); }
@@ -310,7 +334,7 @@ function retrack(pcm, sr, hopMs, winN){
   const read = sig => {
     const out=[];
     for(let i=0; i+winN<=sig.length; i+=step){
-      const d = detect(Float32Array.from(sig.subarray(i,i+winN)), sr, SR_MIN);
+      const d = detect(Float32Array.from(sig.subarray(i,i+winN)), sr, SR_MIN, CLARITY_FILTERED);
       out.push(d ? {hz:d.hz, clarity:d.clarity} : null);
     }
     return out;
@@ -342,7 +366,7 @@ function retrack(pcm, sr, hopMs, winN){
   return best;
 }
 
-function detect(buf, sr, floor){
+function detect(buf, sr, floor, cmin){
   // remove DC, check we have signal at all
   let mean=0; for(let i=0;i<buf.length;i++) mean+=buf[i]; mean/=buf.length;
   let rms=0; for(let i=0;i<buf.length;i++){ buf[i]-=mean; rms+=buf[i]*buf[i]; }
@@ -369,7 +393,7 @@ function detect(buf, sr, floor){
     const v = s/Math.sqrt((r0||1)*(e||1));         // normalised → 0..1 clarity
     if(v>bestV){ bestV=v; best=lag; }
   }
-  if(best<0 || bestV<CLARITY_MIN) return null;
+  if(best<0 || bestV<(cmin||CLARITY_MIN)) return null;
 
   // parabolic interpolation for sub-sample accuracy (matters a lot at 100 Hz)
   const y=l=>{ let s=0; for(let i=0;i<buf.length-l;i++) s+=buf[i]*buf[i+l]; return s; };
@@ -1117,14 +1141,24 @@ async function start(){
   //
   // The level bar reads from after the filter too, which is the honest place for it:
   // wind was pegging the meter on a page that could not hear the hum.
+  /* ⚠️ NARROWED 2026-08-19, and it is the difference between hearing a hum in a car and
+     refusing one. This chain used to be a single 85 Hz high-pass into a 1200 Hz
+     low-pass, which is barely a filter at all: one pole-pair is 12 dB/octave, so at
+     40 Hz - where a car actually lives - it is only about 12 dB down, and everything
+     from 300 to 1200 Hz sails straight through. Measured on his own car recording, 62%
+     of the energy sits below 90 Hz and the raw detector found pitch in 11% of frames.
+     Three poles into a 300 Hz low-pass takes that to 63%, and the live retune below
+     takes it to 77%. (The BOARD had no filter at all, which is why it refused him four
+     times in a row while he hummed at the top of his lungs.) */
   const src = ac.createMediaStreamSource(stream);
-  const hp = ac.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 85;
-  const lp = ac.createBiquadFilter(); lp.type='lowpass';  lp.frequency.value = 1200;
+  hp1 = ac.createBiquadFilter(); hp1.type='highpass'; hp1.frequency.value = 90;  hp1.Q.value=0.707;
+  hp2 = ac.createBiquadFilter(); hp2.type='highpass'; hp2.frequency.value = 90;  hp2.Q.value=0.707;
+  lp1 = ac.createBiquadFilter(); lp1.type='lowpass';  lp1.frequency.value = 300; lp1.Q.value=0.707;
   const an = ac.createAnalyser();
-  an.fftSize = 2048; src.connect(hp); hp.connect(lp); lp.connect(an);
+  an.fftSize = 2048; src.connect(hp1); hp1.connect(hp2); hp2.connect(lp1); lp1.connect(an);
   const buf = new Float32Array(an.fftSize);
 
-  frames=[]; running=true; heard=false; quietRun=0; rumbleTrack=[]; hiTrack=[]; pcmLog=[]; refNote=0; t0=performance.now();
+  frames=[]; running=true; heard=false; quietRun=0; rumbleTrack=[]; hiTrack=[]; pcmLog=[]; refNote=0; tunedTo=0; lvlLog=[]; loudRef=0; t0=performance.now();
   document.getElementById('res').classList.remove('on');
   document.getElementById('go').classList.add('rec');
   document.getElementById('go').textContent = 'Listening… hum, then swing';
@@ -1134,7 +1168,7 @@ async function start(){
   timer = setInterval(()=>{
     an.getFloatTimeDomainData(buf);
     const raw = Float32Array.from(buf);
-    const d = detect(Float32Array.from(raw), ac.sampleRate);
+    const d = detect(Float32Array.from(raw), ac.sampleRate, SR_MIN, CLARITY_FILTERED);
     // keep the audio, not just the verdict on it — the octave resolver has to be able
     // to re-ask the question, and a number can't be re-measured
     frames.push(d ? {hz:d.hz, clarity:d.clarity, rms:d.rms, buf:raw} : {hz:0, buf:raw});
@@ -1178,6 +1212,18 @@ async function start(){
       if(recent.length >= 10){ const r = anchorNote(recent); if(r) refNote = r; }
       if(refNote) for(const fr of frames) fr.drawHz = foldOctave(fr.hz, refNote); }
 
+    /* THE SECOND PASS, LIVE. The fixed 90-300 Hz band is all that can be done before the
+       note is known; the moment it IS known, tighten around it. That is the pass that
+       does the real work - on his car recording, 63% of frames voiced becomes 77%. */
+    if((refNote && !tunedTo) || (refNote && Math.abs(1200*Math.log2(refNote/(tunedTo||refNote))) > 80)){
+      tunedTo = refNote;
+      hp1.frequency.value = Math.max(60, refNote*0.72);
+      hp2.frequency.value = Math.max(60, refNote*0.72);
+      lp1.frequency.value = Math.min(400, refNote*1.55);
+    }
+    // level for the hush, measured AFTER the filter - see the board for why that matters
+    { lvlLog.push(lv); if(d) loudRef = Math.max(loudRef*0.997, lv); }
+
     const bar = document.getElementById('lvlbar');
     bar.style.width = Math.min(100, lv/0.15*100) + '%';
     bar.className = d ? '' : 'hot';
@@ -1217,9 +1263,16 @@ async function start(){
          whole window and the recording never ends. The golfer stands there waiting for
          a score that is not coming, which is the exact thing Brixton hit: "if the hum
          finishes, you gotta show the score." Nine frames in ten silent IS silence. */
+      /* ⚠️ HUSH ON LEVEL, NOT ON PITCH. In a car the pitch track is simply wrong about
+         whether he has stopped - most frames read unvoiced while he is still humming.
+         "All frames unvoiced" then never fires; "90% unvoiced" fires WHILE HE IS STILL
+         HUMMING and cuts the recording to a couple of seconds. Whether a voice is
+         present is a question about level, and the level is read after the filter, so
+         road noise is not in it. The floor is relative to how loud HE was. */
       const need = Math.round(HUSH_MS/HOP);
-      const quiet = frames.slice(-need);
-      if(quiet.length >= need && quiet.filter(f=>!f.hz).length >= need*0.9) return stop();
+      const quietFloor = Math.max(0.0015, loudRef*0.30);
+      const tail = lvlLog.slice(-need);
+      if(tail.length >= need && tail.every(v => v < quietFloor)) return stop();
     }
     /* 45 s, not 15. The clock starts at the TAP, and the real sequence is tap, phone in
        the grass, walk to the ball, set up, swing - fifteen seconds cut that off

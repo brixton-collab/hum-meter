@@ -435,7 +435,7 @@ function retrack(pcm, sr, hopMs, winN){
   const read = sig => {
     const out=[];
     for(let i=0; i+winN<=sig.length; i+=step){
-      const d = H.detect(Float32Array.from(sig.subarray(i,i+winN)), sr, H.SR_MIN);
+      const d = H.detect(Float32Array.from(sig.subarray(i,i+winN)), sr, H.SR_MIN, H.CLARITY_FILTERED);
       out.push(d ? {hz:d.hz, clarity:d.clarity} : null);
     }
     return out;
@@ -472,7 +472,7 @@ function retrack(pcm, sr, hopMs, winN){
    meter does not do: a wind measurement and an impact detector.                  */
 const H = window.HUM, H_ = window.HUM;
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let ac, stream, an, timer, running=false, hiBand=[], loBand=[], t0=0, heard=false, pcmLog=[], refNote=0;
+let ac, stream, an, anF, hp1, hp2, lp1, timer, running=false, hiBand=[], loBand=[], t0=0, heard=false, pcmLog=[], refNote=0, tunedTo=0, lvlLog=[], loudRef=0;
 
 function fit(){ const r=cv.getBoundingClientRect(), d=devicePixelRatio||1;
   cv.width=r.width*d; cv.height=r.height*d; ctx.setTransform(d,0,0,d,0,0); }
@@ -490,18 +490,63 @@ async function start(){
   ac = new (window.AudioContext||window.webkitAudioContext)();
   const src = ac.createMediaStreamSource(stream);
   an = ac.createAnalyser(); an.fftSize = 2048; src.connect(an);
+
+  /* ── FILTER THE LIVE AUDIO. THIS IS THE ONE THAT MATTERED. ──────────────────
+     Brixton, humming loudly in the back of a car, refused four times: "you're not
+     even catching the hums, you can hear me humming loud in this. I'm doing the same
+     thing on Nail the Pitch and it picks it up perfectly."
+
+     He was right, and the two-pass filter built this morning did not help him, because
+     of WHERE it ran. It ran once, at the end, on a reconstruction. The LIVE detector -
+     the one that decides whether a frame has pitch, which is what arms the stop, ends
+     the recording, draws the line, and answers "did it ever hold a note?" - was still
+     reading RAW audio. In that car 62% of the energy sits below 90 Hz. Measured on his
+     own recording:
+
+         RAW (what the live detector used)   11% of frames voiced, longest run 240 ms
+         wide band-pass 90-300 Hz            27%                            160 ms
+         tight band around his note          45%                            280 ms
+
+     The gate needs 400 ms. It could not be reached from raw audio, so the refusal was
+     structural: he could not have passed no matter how well he hummed.
+
+     Nail the Pitch "works every time" because it filters BEFORE it looks, continuously.
+     So do this now. These are BiquadFilterNodes in the audio graph - the browser runs
+     them in native code for free, every sample, with no 40 ms budget to blow. The raw
+     analyser stays for the rumble and impact bands, which need the whole spectrum. */
+  hp1 = ac.createBiquadFilter(); hp1.type='highpass'; hp1.frequency.value=90;  hp1.Q.value=0.707;
+  hp2 = ac.createBiquadFilter(); hp2.type='highpass'; hp2.frequency.value=90;  hp2.Q.value=0.707;
+  lp1 = ac.createBiquadFilter(); lp1.type='lowpass';  lp1.frequency.value=300; lp1.Q.value=0.707;
+  src.connect(hp1); hp1.connect(hp2); hp2.connect(lp1);
+  anF = ac.createAnalyser(); anF.fftSize = 2048; lp1.connect(anF);
+
   const buf = new Float32Array(an.fftSize);
+  const bufF = new Float32Array(anF.fftSize);
   const spec = new Uint8Array(an.frequencyBinCount);
 
-  H.setFrames([]); hiBand=[]; loBand=[]; pcmLog=[]; refNote=0; running=true; heard=false; t0=Date.now();
+  H.setFrames([]); hiBand=[]; loBand=[]; pcmLog=[]; refNote=0; tunedTo=0; lvlLog=[]; loudRef=0; running=true; heard=false; t0=Date.now();
   const b=document.getElementById('go'); b.classList.add('rec');
   b.textContent='Listening — hum, swing, then stop';
   document.getElementById('res').style.display='none';
 
   timer = setInterval(()=>{
-    an.getFloatTimeDomainData(buf);
+    an.getFloatTimeDomainData(buf);          // raw - for rumble, impact, and pcmLog
     an.getByteFrequencyData(spec);
-    const d = H.detect(buf, ac.sampleRate, H.SR_MIN);
+    anF.getFloatTimeDomainData(bufF);        // filtered - for PITCH. see the note above.
+    const d = H.detect(bufF, ac.sampleRate, H.SR_MIN, H.CLARITY_FILTERED);
+
+    /* THE LEVEL THAT DECIDES WHEN HE HAS STOPPED, measured on the FILTERED signal and
+       not the raw one. That is the whole trick: in a car the raw level barely moves
+       when he stops humming, because the road is still there and the road is most of
+       the energy. Band-limited to his note, his voice is nearly all of what is left, so
+       the level drops off a cliff the moment he stops - which is the event we need.
+       The floor is relative to how loud HE was, so it works in a car and in a quiet
+       room without a number tuned to either. */
+    { let e=0; for(let i=0;i<bufF.length;i++) e+=bufF[i]*bufF[i];
+      const rmsF = Math.sqrt(e/bufF.length);
+      lvlLog.push(rmsF);
+      if(d) loudRef = Math.max(loudRef*0.997, rmsF);   // decaying peak of the actual hum
+    }
     H.getFrames().push({hz: d ? d.hz : 0, clarity: d ? d.clarity : 0});
     // keep the raw audio for the second, properly-filtered look after recording ends
     { const hop = Math.round(ac.sampleRate*H.HOP/1000);
@@ -527,6 +572,20 @@ async function start(){
     { const recent = H.getFrames().slice(-50).filter(f=>f.hz).map(f=>f.hz);
       if(recent.length >= 10){ const r = H.anchorNote(recent); if(r) refNote = r; }
       if(refNote) for(const fr of H.getFrames()) fr.drawHz = H.foldOctave(fr.hz, refNote); }
+
+    /* THE SECOND PASS, LIVE. Pass 1 above is the fixed 90-300 Hz band, which is all we
+       can do before the note is known. The moment it IS known, tighten the filter
+       around it - that is the pass that does the real work, and on his car recording it
+       is the difference between 27% of frames voiced and 45%. It could only ever run
+       after the fact before, on a stitched reconstruction; now it runs on the live
+       signal, which is what the whole recording is judged on.
+       Retuned only on a real change, so an ordinary vibrato does not chase the filter. */
+    if(refNote && Math.abs(1200*Math.log2(refNote/(tunedTo||refNote))) > 80 || (refNote && !tunedTo)){
+      tunedTo = refNote;
+      hp1.frequency.value = Math.max(60, refNote*0.72);
+      hp2.frequency.value = Math.max(60, refNote*0.72);
+      lp1.frequency.value = Math.min(400, refNote*1.55);
+    }
     draw();
 
     /* HANDS-FREE STOP.
@@ -571,9 +630,19 @@ async function start(){
          whole window and the recording never ends. The golfer stands there waiting for
          a score that is not coming. Brixton: "if the hum finishes, you gotta show the
          score." Nine frames in ten being silent IS silence. */
+      /* ⚠️ HUSH ON LEVEL, NOT ON PITCH. Both previous versions asked the pitch track
+         whether he had stopped, and in a car the pitch track is wrong about that: most
+         frames read unvoiced even while he is humming his lungs out. "All frames
+         unvoiced" then never fires and the recording runs to the 45 s cap; "90% of
+         frames unvoiced" - which I shipped an hour ago - fires WHILE HE IS STILL
+         HUMMING and cuts the recording to a couple of seconds, which is worse.
+         Whether a voice is present is a question about LEVEL, and the level meter is
+         not fooled by road noise the way the pitch detector is. So: he has stopped when
+         the microphone goes quiet, full stop. */
       const need = Math.round(HUSH_MS/H.HOP);
-      const tail = H.getFrames().slice(-need);
-      if(tail.length >= need && tail.filter(f=>!f.hz).length >= need*0.9) return stop();
+      const quietFloor = Math.max(0.0015, loudRef*0.30);
+      const tail = lvlLog.slice(-need);
+      if(tail.length >= need && tail.every(v => v < quietFloor)) return stop();
     }
     /* 45 s, not 15. The clock starts when they TAP, and the real sequence is: tap, put
        the phone in the grass, walk to the ball, set up, swing. Fifteen seconds cut that

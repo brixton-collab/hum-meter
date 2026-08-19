@@ -19,7 +19,8 @@ const HOP = 40;                       // ms between pitch frames
 const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
 const JUMP_CENTS = 50;                // pitch move that counts as a crack...
 const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
-const CLARITY_MIN = 0.52;             // below this the frame isn't a tone
+const CLARITY_MIN = 0.52;             // below this the frame isn't a tone (RAW audio)
+const CLARITY_FILTERED = 0.36;        // ...and this is the bar once the audio IS filtered
 const CLARITY_GATE = 0.45;            // below this the RECORDING is too rough to score
 const OCTAVE_OFF_CENTS = 150;         // this far off the note = wrong octave, not vibrato
 const HUSH_MS = 1400;                 // silence this long after a hum = you're done
@@ -53,7 +54,7 @@ const median=a=>{ const s=[...a].sort((x,y)=>x-y); const m=s.length>>1;
 const sd=a=>{ if(a.length<2) return 0; const m=a.reduce((x,y)=>x+y,0)/a.length;
   return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/a.length); };
 
-function detect(buf, sr, floor){
+function detect(buf, sr, floor, cmin){
   // remove DC, check we have signal at all
   let mean=0; for(let i=0;i<buf.length;i++) mean+=buf[i]; mean/=buf.length;
   let rms=0; for(let i=0;i<buf.length;i++){ buf[i]-=mean; rms+=buf[i]*buf[i]; }
@@ -80,7 +81,7 @@ function detect(buf, sr, floor){
     const v = s/Math.sqrt((r0||1)*(e||1));         // normalised → 0..1 clarity
     if(v>bestV){ bestV=v; best=lag; }
   }
-  if(best<0 || bestV<CLARITY_MIN) return null;
+  if(best<0 || bestV<(cmin||CLARITY_MIN)) return null;
 
   // parabolic interpolation for sub-sample accuracy (matters a lot at 100 Hz)
   const y=l=>{ let s=0; for(let i=0;i<buf.length-l;i++) s+=buf[i]*buf[i+l]; return s; };
@@ -399,7 +400,7 @@ function throughImpact(fr, impactFrame, windowMs){
 }
 
 window.HUM = { setFrames, getFrames, HOP, SR_MIN, SR_MAX, VIEW_CENTS, NOTE_NAMES,
-               TOL_CENTS, CRACK_CAP, CAL, CLARITY_GATE,
+               TOL_CENTS, CRACK_CAP, CAL, CLARITY_GATE, CLARITY_FILTERED,
                median, sd, detect, noteOf, robustNote, foldOctave, anchorNote, confirmNoteOctave,
                resolveOctaves, deHash, isolate, score, beats,
                signalQuality, gustSuspect, findImpact, throughImpact, WIND };
