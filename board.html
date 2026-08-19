@@ -335,9 +335,13 @@ const Store = {
   async everyone(){
     if(!cloudOn()) return { rows: this.localAll(), local:true };
     try{
+      // Deletes are deliberately not permitted by the row-level policies - nobody can
+      // wipe the data, which also means the wiring-test row cannot be removed. Filter it
+      // out at read time instead.
       const r = await fetch(CLOUD.url+'/'+CLOUD.table+'?select=*&order=at.desc&limit=5000',
         {headers:{apikey:CLOUD.key, Authorization:'Bearer '+CLOUD.key}});
-      return { rows: await r.json(), local:false };
+      const all = await r.json();
+      return { rows: Array.isArray(all) ? all.filter(x=>x.source!=='wiring-test-ignore') : [], local:false };
     }catch(e){ return { rows:this.localAll(), local:true }; }
   }
 };
