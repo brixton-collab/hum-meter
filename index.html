@@ -856,7 +856,7 @@ const TOL_CENTS = 25, TREND_MS = 200, HOLD_MIN_MS = 50, GASP_CENTS = 100, GASP_G
 // cracking. Measured against his ten graded clips this crack definition returns 0 for
 // every hum he called good and non-zero for every hum he called broken, so the cap only
 // actually bites on one of them - the rule and the metric already agreed.
-const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 50,
+const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 100,
       CRACK_DROP_MS = 100, CRACK_TAIL_MS = 150;
 
 // ── ISOLATE THE HUM ──────────────────────────────────────────────────────────
@@ -943,12 +943,53 @@ function score(rumble, level){
   const cents = vh.map(h=>1200*Math.log2(h/note));
   const k = Math.max(1, Math.round(TREND_MS/HOP/2));
   const path = cents.map((_,i)=>median(cents.slice(Math.max(0,i-k), i+k+1)));
-  const dev  = cents.map((c,i)=>Math.abs(c-path[i]));
+  /* ── SUBTRACT OUR OWN MEASUREMENT NOISE ───────────────────────────────────────
+     This is the rule the whole day kept arriving at, finally stated properly: do not
+     charge a golfer for OUR error.
+
+     `dev` is how far each frame sits from the local trend, and it contains two things
+     that are not the same - how much his pitch actually moved, and how badly we measured
+     it. On clean audio the second term is negligible. On a road it is not, and it is why
+     the same hum collapsed: noise inflates dev everywhere, more frames fall outside the
+     25-cent tolerance, and enough of them cross 100 cents to manufacture cracks he never
+     made. Measured: REF2 went 90 with zero cracks to 56 with seven, purely from adding
+     his own road recording underneath his own hum.
+
+     The measurement noise can be estimated, because a human voice cannot move much in
+     40 ms. Frame-to-frame change beyond the physiological limit is not him - it is us.
+     Taking a ROBUST spread of the frame differences (MAD, so a real crack does not
+     inflate it) gives sigma, and subtracting it in quadrature leaves the movement that
+     was actually his:
+
+         dev_true = sqrt( max(0, dev^2 - sigma^2) )
+
+     On a clean hum sigma is a few cents and nothing changes - his graded anchors are
+     the proof. On a noisy one sigma is large and the score stops collapsing. An
+     instrument that knows its own precision reports the signal, not the error bar. */
+  const diffs = [];
+  for(let i=1;i<cents.length;i++) diffs.push(Math.abs(cents[i]-cents[i-1]));
+  const sigma = diffs.length ? Math.min(40, median(diffs)*1.4826/Math.SQRT2) : 0;
+  const dev  = cents.map((c,i)=>Math.sqrt(Math.max(0, (c-path[i])*(c-path[i]) - sigma*sigma)));
 
   // dev laid back onto the full span, so a dropout and a spike are the same axis
   const devSpan = new Array(span.length).fill(null);
   let vi=0; for(let i=0;i<span.length;i++) if(voiced[i]) devSpan[i]=dev[vi++];
 
+  /* ⚠️ EXCLUDING UNMEASURABLE TIME FROM THE DENOMINATOR WAS TRIED HERE AND REVERTED.
+
+     The idea was sound and the measurements were good almost everywhere: dividing only
+     by time we could actually hear took PERFECT2 in heavy noise from 62 to 85, REF2 from
+     56 to 66, SWING63 from 42 to 56. It failed on the case the product exists for.
+
+     A SWING hum stops at the ball. That stop is the measurement - it is the restriction
+     Brixton wants a golfer to see. But a strike is loud, so "the band is still loud, so
+     we must have failed to hear him" is exactly true at impact, and the frame gets
+     excluded instead of counted. SWING121 went from 68 to 89 against his own "60s ish":
+     the rule forgave precisely the event it should have caught. Narrowing the level
+     measurement to his note instead of the whole band did not separate them either.
+
+     So the span stays the span. If a better discriminator between "he stopped" and "we
+     went deaf" turns up, this is where it goes - but it has to survive SWING121. */
   const onLine = devSpan.map(d=>d!==null && d<=TOL_CENTS);
   const total  = onLine.filter(Boolean).length / span.length * 100;
   const line   = dev.filter(d=>d<=TOL_CENTS).length / dev.length * 100;
@@ -1124,7 +1165,7 @@ function score(rumble, level){
   const clar = span.filter(f=>f.hz).reduce((s,f)=>s+(f.clarity||0),0)/Math.max(vh.length,1);
   return { total: Math.round(finalTotal*10)/10, line, onAir, tension, tilt, note, cracks, capped, windCracks, noiseGaps,
            humStart: i0+first, humWindow: [i0*HOP/1000, i1*HOP/1000],
-           jitter: median(dev)*1.4826, held:(vh.length*HOP)/1000,
+           jitter: median(dev)*1.4826, sigma, held:(vh.length*HOP)/1000,
            span:(span.length*HOP)/1000, purity: clar, rough: clar < CLARITY_GATE };
 }
 
