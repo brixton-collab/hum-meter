@@ -209,7 +209,7 @@ function isolate(fr){
   if((end-start)*HOP < ISO_MIN_MS) return [0, fr.length];
   return [start, end+1];
 }
-function score(rumble){
+function score(rumble, level){
   const [i0,i1] = isolate(frames);
   const hum = frames.slice(i0,i1);
   /* ⚠️ THE SPAN MUST START AT A REAL HUM, NOT AT THE FIRST FRAME THAT READS AS PITCH.
@@ -288,6 +288,7 @@ function score(rumble){
   for(let i=0;i<n;i++){ num += (i-xm)*(path[i]-ym); den += (i-xm)*(i-xm); }
   // CRACKS: an audible break. The last 150 ms is exempt - on a swing hum that is impact,
   // and impact is the strike, not a crack.
+  let noiseGaps = 0;
   const guard = span.length - Math.round(CRACK_TAIL_MS/HOP);
   /* A HEAD GUARD, symmetric with the tail one. The tail was exempt because on a swing
      hum the last 150 ms is impact, and impact is the strike rather than a crack. The
@@ -300,13 +301,51 @@ function score(rumble){
     if(devSpan[i]!==null && devSpan[i]>CRACK_JUMP_C){
       let j=i, mx=0;
       while(j<span.length && devSpan[j]!==null && devSpan[j]>CRACK_JUMP_C){ mx=Math.max(mx,devSpan[j]); j++; }
+      /* ⚠️ CLARITY WAS TRIED HERE AS A "was this really him?" TEST FOR JUMPS, THE WAY
+         BAND ENERGY WORKS FOR DROPOUTS, AND IT WAS REVERTED. It does not separate the
+         two cases, because clarity falls during a REAL crack as well - the voice is
+         disintegrating, which is exactly what the detector reports as low confidence.
+         Measured: it deleted real cracks from his swing hums and took SWING121 from 68
+         to 82 against his own "60s ish". A discriminator that cannot tell the two apart
+         just deletes evidence.
+         Band energy works for dropouts because it answers a different question - is the
+         hum still THERE - and there is no equivalent for a jump. Left as-is on purpose. */
       if((j-i)*HOP>=CRACK_JUMP_MS && i<guard && i>=headGuard)
         cracks.push({kind:'jump', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:Math.round(mx)});
       i=j;
     } else if(!voiced[i]){
       let j=i; while(j<span.length && !voiced[j]) j++;
-      if((j-i)*HOP>=CRACK_DROP_MS && i>=headGuard && i<guard)
-        cracks.push({kind:'drop', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:0});
+      /* ⚠️ "THE VOICE BROKE" vs "WE LOST THE SIGNAL" - these are not the same event and
+         charging for both is what noise does to a score.
+
+         Measured with the noise suite, mixing his own road recording into his own graded
+         hums: REF2 went from 90 with ZERO cracks to 56 with SEVEN the moment a quiet road
+         was added. He had not hummed any differently. Every one of those cracks was a
+         stretch where the detector could no longer resolve his hum through the noise.
+
+         There is a physical difference and it is easy to read. When a voice genuinely
+         stops, the energy IN THE HUM BAND goes with it. When noise merely swamps the
+         detector, the band stays loud - the hum is still there, we just cannot resolve
+         a period out of it. So a dropout only counts as a crack if the band actually
+         went quiet. If it stayed loud, we failed to hear him; that is our problem, not
+         his, and it is reported as noise rather than charged to his score. */
+      const gapCounts = (()=>{
+        if(!level || !level.length) return true;              // no level data - old behaviour
+        const base = i0 + first;
+        const voicedLv = [], gapLv = [];
+        for(let k=0;k<span.length;k++){ const v = level[base+k];
+          if(v==null) continue; (voiced[k] ? voicedLv : gapLv).push(v); }
+        if(voicedLv.length < 5) return true;
+        const ref = median(voicedLv);
+        let sum=0, n=0;
+        for(let k=i;k<j;k++){ const v = level[base+k]; if(v!=null){ sum+=v; n++; } }
+        if(!n) return true;
+        return (sum/n) < ref*0.5;                             // band went quiet => a real break
+      })();
+      if((j-i)*HOP>=CRACK_DROP_MS && i>=headGuard && i<guard){
+        if(gapCounts) cracks.push({kind:'drop', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:0});
+        else noiseGaps++;
+      }
       i=j;
     } else i++;
   }
@@ -394,7 +433,7 @@ function score(rumble){
   // were pushed without a clarity value. One undefined turns the whole average into NaN,
   // which is what put "NaN" on screen where a percentage should be.
   const clar = span.filter(f=>f.hz).reduce((s,f)=>s+(f.clarity||0),0)/Math.max(vh.length,1);
-  return { total: Math.round(finalTotal*10)/10, line, onAir, tension, tilt, note, cracks, capped, windCracks,
+  return { total: Math.round(finalTotal*10)/10, line, onAir, tension, tilt, note, cracks, capped, windCracks, noiseGaps,
            humStart: i0+first, humWindow: [i0*HOP/1000, i1*HOP/1000],
            jitter: median(dev)*1.4826, held:(vh.length*HOP)/1000,
            span:(span.length*HOP)/1000, purity: clar, rough: clar < CLARITY_GATE };

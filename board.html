@@ -733,7 +733,7 @@ function stop(){
     'Didn’t hear a hum. Hold one note, closer to the phone.'; return; }
   const off=a;
   H.setFrames(fr.slice(a,z+1)); fr=H.getFrames();
-  hiBand = hiBand.slice(a,z+1); loBand = loBand.slice(a,z+1);
+  hiBand = hiBand.slice(a,z+1); loBand = loBand.slice(a,z+1); lvlLog = lvlLog.slice(a,z+1);
 
   // ── THE WIND GATE ──────────────────────────────────────────────────────────
   // Refuse rather than guess. A wrong score loses trust for good; "I couldn't hear
@@ -768,7 +768,8 @@ function stop(){
   fr.forEach(f=>{ f.drawHz=f.hz; });
   H.deHash();
 
-  const s = H.score(loBand);   // loBand is the per-frame rumble - see the wind filter
+  const s = H.score(loBand, lvlLog);  // rumble + per-frame HUM-BAND LEVEL. The level is
+                                      // what separates "his voice broke" from "we lost him".
   if(!s){ document.getElementById('live').textContent='Not enough of a hum to score.'; return; }
 
   // Impact is a LANDMARK, not the end of the hum. He hums through the strike; when
