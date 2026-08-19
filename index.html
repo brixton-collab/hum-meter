@@ -146,6 +146,9 @@
       </button>
     </div>
 
+    <div id="roughNote" style="display:none;margin:10px 0;padding:10px;border-radius:9px;
+         background:#3a2a12;border:1px solid #6b4d18;color:#ffd98a;font-size:13px"></div>
+
     <p class="cardhint">Screenshot this to share it</p>
     <canvas id="card"></canvas>
 
@@ -176,7 +179,11 @@ const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
 const JUMP_CENTS = 50;                // pitch move that counts as a crack...
 const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
 const CLARITY_MIN = 0.55;             // below this the frame isn't a tone
-const CLARITY_GATE = 0.62;            // below this the RECORDING is too rough to score
+const CLARITY_GATE = 0.45;            // below this the RECORDING is too rough to score
+// Lowered from 0.62 on 2026-08-19. It was set on quiet-room recordings, and a phone in a
+// moving car (or a golfer at a windy range) sits well under it while still producing a
+// perfectly readable hum. The pitch track either resolves or it does not — `voiced %` and
+// "did it ever hold a note?" already catch the case where it genuinely did not.
 const OCTAVE_OFF_CENTS = 150;         // this far off the note = wrong octave, not vibrato
 const HUSH_MS = 1400;                 // silence this long after a hum = you're done
 // Raised from 900 ms on 2026-08-18, and the reason is the whole point of the product.
@@ -1115,6 +1122,26 @@ function stop(){
        CLARITY  - the detector's own confidence. Wind makes it guess.
        VOICED % - wind masks the fundamental, so frames stop resolving at all.
        RUMBLE   - sub-100 Hz energy, which is wind and is not a hum.               */
+  /* ══ THE RULE, REWRITTEN 2026-08-19 ═════════════════════════════════════════
+     ALWAYS SCORE IT. Only refuse when there is genuinely no hum to read.
+
+     Brixton, trying to record in a car: "You're making it frustrating. If it's a
+     little bit of background noise, you're saying you can't read it. Just try to read
+     the hum as best you can even with the wind."
+
+     He is right, and I had the evidence and drew the wrong conclusion from it. The
+     synthetic wind suite showed that noise almost never breaks the score — a 25 mph
+     gale still scored a clean hum 100.0. I built refusals anyway, and the result is a
+     golfer standing at a windy range being told "no" over and over while the scorer
+     sitting behind the message would have been right every time.
+
+     A wrong score is recoverable — they hum again. A refusal is not: they conclude it
+     is broken and never come back, and unlike a wrong score nobody ever reports it.
+
+     So the ONLY refusal left is "I could not find a hum in that" — a fact, not a
+     judgement about conditions. Everything else scores, and if it was rough the score
+     carries a note saying so. Tell them the number AND the caveat; do not withhold
+     the number because of the caveat.                                                */
   const voicedPct = frames.length ? frames.filter(f=>f.hz).length/frames.length : 0;
   const rumble = rumbleTrack.length
     ? rumbleTrack.reduce((a,b)=>a+b,0)/rumbleTrack.length : 0;
@@ -1141,7 +1168,20 @@ function stop(){
   const longestMs = runs.length ? Math.max(...runs)*HOP : 0;
   const flapping = longestMs < 400;
 
-  const windy = rumble > 0.62, thin = voicedPct < 0.30;
+  /* ⚠️ NO STANDALONE "TOO WINDY" REFUSAL. Removed 2026-08-19 after Brixton was refused
+     trying to record in the back of a moving car — road noise is low-frequency, exactly
+     like wind, so the rumble check fired on a recording that would have scored fine.
+
+     The evidence was already in the synthetic wind suite and I ignored it: rumble ALONE
+     does not predict a wrong score. A 25 mph gale still scored a clean hum 100.0,
+     correctly. The only condition that ever produced a WRONG number was gusty AND
+     cracked — where a gust manufactures a break that cannot honestly be blamed on the
+     golfer. That narrow rule stays; the blunt one is gone.
+
+     Refusing a hum that would have scored correctly is the worse failure. The golfer
+     gets nothing, concludes it is broken, and does not come back — and unlike a wrong
+     score, nobody ever reports it. */
+  const noHum = longestMs < 400;   // nothing ever held a note — there is nothing to score
 
   /* THE ONE THAT REPORTED A WRONG NUMBER. In the synthetic wind suite a 10 mph gust
      landed mid-hum and manufactured a crack: the score came back 74.3 against a clean
@@ -1152,15 +1192,10 @@ function stop(){
      and they do not come back. A 25 mph gale still scored a clean hum 100.0, correctly. */
   const gusty = rumbleP90 > 0.55 && s.cracks.length > 0;
 
-  if(s.rough || windy || thin || flapping || gusty){
+  if(noHum){
     document.getElementById('hint').innerHTML =
-      '<b style="color:var(--warn)">⚠️ Couldn’t hear that one fairly — go again.</b> ' +
-      (gusty ? 'The wind gusted while you hummed, so I cannot tell whether that break was you or the wind.'
-       : windy ? 'Too much wind on the mic. Turn out of the wind, or cup a hand around the phone.'
-       : flapping ? 'The mic kept cutting in and out. Move the phone closer and try again.'
-       : thin ? 'I kept losing your note. Hold ONE note and keep it going.'
-       : 'Too much background noise. Somewhere quieter, phone closer.') +
-      '<br><span style="opacity:.7">I’d rather give you nothing than a wrong number.</span>';
+      '<b style="color:var(--warn)">I couldn’t find a hum in that.</b> ' +
+      'Hold ONE note out loud and keep it going — closer to the phone if you can.';
     document.getElementById('res').classList.remove('on');
     return; }
 
@@ -1247,6 +1282,16 @@ function stop(){
     setSay('You lost the hum right at the ball. That is where you tightened up.');
   else if(through && through.survived && !s.cracks.length)
     setSay('Held it through the ball.');
+
+  /* Rough conditions are a NOTE on the score, never a reason to withhold it. */
+  const rough = (rumbleP90 > 0.55) || (s.rough) || (voicedPct < 0.45);
+  const noteEl = document.getElementById('roughNote');
+  if(noteEl){
+    noteEl.style.display = rough ? '' : 'none';
+    noteEl.textContent = gusty
+      ? 'Noisy recording — that break might be the wind rather than you.'
+      : 'Noisy recording, so treat this one as a rough guide.';
+  }
 
   const cta = document.getElementById('cta');
   if(cta) cta.style.display = '';

@@ -20,7 +20,7 @@ const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
 const JUMP_CENTS = 50;                // pitch move that counts as a crack...
 const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
 const CLARITY_MIN = 0.55;             // below this the frame isn't a tone
-const CLARITY_GATE = 0.62;            // below this the RECORDING is too rough to score
+const CLARITY_GATE = 0.45;            // below this the RECORDING is too rough to score
 const OCTAVE_OFF_CENTS = 150;         // this far off the note = wrong octave, not vibrato
 const HUSH_MS = 1400;                 // silence this long after a hum = you're done
 const CAL = {
@@ -271,7 +271,11 @@ function beats(total){
      1. CLARITY  - the detector's own confidence. Wind makes it guess.
      2. VOICED % - wind masks the fundamental, so frames stop resolving at all.
      3. RUMBLE   - wind is overwhelmingly sub-100 Hz energy. A hum is not.        */
-const WIND = { clarity: 0.55, voiced: 0.30, rumble: 0.62, holdMs: 400, gust: 0.55 };
+/* ALWAYS SCORE IT — see the rule written out in hum-meter.html. Clarity, voiced% and
+   rumble are kept as DIAGNOSTICS and reported, but none of them refuse on their own.
+   The only thing that refuses is "nothing ever held a note", which is a statement of
+   fact rather than a judgement about conditions. */
+const WIND = { clarity: 0, voiced: 0, rumble: 99, holdMs: 400, gust: 0.55 };
 
 /* WIND-INDUCED FALSE CRACKS — the failure the synthetic wind suite exposed, and the
    only one that produced a WRONG number rather than a refused one.
