@@ -84,11 +84,12 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
     <div id="blocker"></div>
     <div class="card">
       <canvas id="cv"></canvas>
-      <div id="live" class="hint" style="margin-top:10px">Hum one note, right through the ball.</div>
+      <div id="live" class="hint" style="margin-top:10px">Hum one note, right through the ball. It stops on its own.</div>
     </div>
-    <button class="btn" id="go">Tap to start humming</button>
+    <button class="btn" id="go">Tap once, then hum</button>
     <div class="hint" style="margin-top:10px;text-align:center">
-      Hum through the backswing, the strike, and the follow-through.
+      Put the phone down. Hum through the backswing, the strike and your finish —
+      it stops on its own when you go quiet.
     </div>
 
     <div class="card" id="res" style="display:none">
@@ -319,7 +320,7 @@ const Store = {
    meter does not do: a wind measurement and an impact detector.                  */
 const H = window.HUM, H_ = window.HUM;
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let ac, stream, an, timer, running=false, hiBand=[], loBand=[], t0=0;
+let ac, stream, an, timer, running=false, hiBand=[], loBand=[], t0=0, heard=false;
 
 function fit(){ const r=cv.getBoundingClientRect(), d=devicePixelRatio||1;
   cv.width=r.width*d; cv.height=r.height*d; ctx.setTransform(d,0,0,d,0,0); }
@@ -340,8 +341,9 @@ async function start(){
   const buf = new Float32Array(an.fftSize);
   const spec = new Uint8Array(an.frequencyBinCount);
 
-  H.setFrames([]); hiBand=[]; loBand=[]; running=true; t0=Date.now();
-  const b=document.getElementById('go'); b.classList.add('rec'); b.textContent='Recording — tap to stop';
+  H.setFrames([]); hiBand=[]; loBand=[]; running=true; heard=false; t0=Date.now();
+  const b=document.getElementById('go'); b.classList.add('rec');
+  b.textContent='Listening — hum, swing, then stop';
   document.getElementById('res').style.display='none';
 
   timer = setInterval(()=>{
@@ -360,7 +362,29 @@ async function start(){
     }
     loBand.push(lo/(lo+mid+1e-9)); hiBand.push(hi);
     draw();
-    if(Date.now()-t0 > 15000) stop();      // hard stop, nobody hums for 15 seconds
+
+    /* HANDS-FREE STOP.
+       Brixton: "I don't want to have to hit recording, tap to stop. That's gonna be
+       annoying for golfers." He is right, and it is not a convenience issue - the real
+       use is a phone lying in the grass next to the ball with BOTH hands on a club. You
+       cannot tap to stop, and a recording that ends when someone walks over to their
+       phone has a swing's worth of silence and footsteps welded onto the end of it,
+       which the scorer then has to guess its way past.
+
+       So: once a hum has actually STARTED, going quiet ends it. Tap once, hum, swing,
+       pick the phone up and read the score.
+
+       The threshold is HUSH_MS = 1400 ms and it must not go lower: the hum often pauses
+       AT the strike, and that pause is the tension being measured. At 900 ms the
+       recorder stopped during the pause and threw the follow-through away. */
+    const HUSH_MS = 1400;
+    if(!heard && d) heard = true;
+    if(heard){
+      const need = Math.round(HUSH_MS/H.HOP);
+      const tail = H.getFrames().slice(-need);
+      if(tail.length >= need && tail.every(f=>!f.hz)) return stop();
+    }
+    if(Date.now()-t0 > 15000) stop();      // hard cap; nobody hums for fifteen seconds
   }, H.HOP);
 }
 
@@ -369,6 +393,7 @@ function stop(){
   running=false; clearInterval(timer);
   stream.getTracks().forEach(t=>t.stop()); ac.close();
   const b=document.getElementById('go'); b.classList.remove('rec'); b.textContent='Hum again';
+  heard=false;
 
   let fr = H.getFrames();
   let a=0, z=fr.length-1;
