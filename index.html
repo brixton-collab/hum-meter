@@ -1177,6 +1177,46 @@ function score(rumble, level){
     }
   }
 
+  /* ── A BREAK IN LOUDNESS IS A BREAK ───────────────────────────────────────────
+     Everything above asks whether he HELD THE NOTE. Nothing asked whether the hum was
+     still THERE, and those are not the same question.
+
+     REF3 is the proof. He graded it "the hum is lost ... all the breaks, I'd put it 50s,
+     60 ish". The scorer said 85 with ZERO cracks, because his pitch never wandered - it
+     drops out three times mid-clip while staying exactly on note, and a dropout is only
+     seen when the PITCH disappears. Measured against its own peak, 17% of REF3 sits under
+     a quarter of its own loudness, against 5-6% for the two hums he graded in the 90s.
+
+     So a sustained collapse in level, relative to the body of his own hum, is a break -
+     and it is charged as one whether or not the pitch survived it. This is also the same
+     event as losing it at the ball, which is the thing the meter is FOR.               */
+  if(level && level.length){
+    const base = i0 + first;
+    const lv = []; for(let i=0;i<span.length;i++){ const v=level[base+i]; if(v!=null && voiced[i]) lv.push(v); }
+    if(lv.length >= 10){
+      const ref = median(lv), floor = ref*0.30, need = Math.round(150/HOP);
+      for(let i=0;i<span.length;){
+        const v = level[base+i];
+        if(v == null || v >= floor){ i++; continue; }
+        let j=i; while(j<span.length && level[base+j]!=null && level[base+j]<floor) j++;
+        /* ⚠️ A BREAK HAS HUM ON BOTH SIDES OF IT. Every hum tapers at the end, and the
+           first version of this charged that taper as a break - his PERFECT2, which he
+           graded ~100, dropped to 74 for the way it finished. A fade is only a break if
+           he PICKED IT BACK UP, which is exactly how he describes the event: "you can
+           hear me hum, then I hit the ball (lose the hum), then hum picks back". So
+           require the hum to come back loud enough, after the quiet patch, to prove it
+           was a break in the middle and not the ending. */
+        const after = level.slice(base+j, base+j+need*2).filter(v=>v!=null && v>=ref*0.6);
+        const cameBack = after.length >= Math.min(need, 3);
+        if(cameBack && (j-i) >= need && i>=headGuard && i<guard &&
+           !cracks.some(c=>{ const a2=Math.round(c.at*1000/HOP); return a2<j && a2+Math.round(c.ms/HOP)>i; }))
+          cracks.push({kind:'fade', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:0});
+        i=j;
+      }
+      cracks.sort((a,b)=>a.at-b.at);
+    }
+  }
+
   // THE CRACK RULE, and the fix to it.
   // Brixton: "if the hum cracks, the score has to be definitely below 75."
   // A flat ceiling did that — and piled every cracked hum onto exactly 74.9, so a badly

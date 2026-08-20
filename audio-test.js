@@ -192,7 +192,7 @@ const CASES=[
   ['PERFECT2','NTP-perfect2.wav',    'he said "close to 100"',        92,100],
   ['REF1',    'NTP-steady-ref.wav',  'he said "high 90s"',            92,100],
   ['REF2',    'NTP-less-steady.wav', 'he said "below REF1"',          70, 96],
-  ['REF3',    'NTP-spiky.wav',       'he said "the hum is lost"',     35, 65],
+  ['REF3',    'NTP-spiky.wav',       'RE-GRADED: "50s-60ish, all the breaks"', 45, 65],
   ['SWING23', 'NTP-swing23.wav',     'he said "60s ish"',             50, 75],
   ['SWING63', 'NTP-swing63.wav',     'RE-GRADED: "50s - I lost it at impact"', 42, 62],
   ['SWING121','NTP-swing121.wav',    'he said "60s ish"',             50, 75],
