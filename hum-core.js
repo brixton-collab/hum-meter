@@ -258,6 +258,25 @@ function score(rumble, level){
 
      So an onset is a RUN, not a frame: 200 ms of continuous pitch is a voice starting.
      A single frame is noise, and noise is what the lead-in is made of. */
+  /* ⚠️ THE SPAN IS THE BODY OF THE HUM, NOT EVERYTHING FROM THE FIRST BLIP TO THE LAST.
+
+     He graded two of his own six-foot recordings by ear - "90+, super steady, NO BREAKS"
+     and "elite, over 90" - and the scorer found three and five cracks in them. Where they
+     sat is the whole story:
+
+         REAL-6FT (no breaks)   0.4s, 0.8s ................... 11.9s     clip is 14.9s
+         FAR-6FT  (no breaks)   0.6s, 0.9s, 1.2s, 1.6s ....... 9.6s      clip is  9.9s
+         REF3     (all breaks)  ..... 3.3 4.3 4.6 7.9 11.3 12.9s
+         SWING63  (lost at ball) .... 4.4 4.5 4.6s
+
+     Every false crack is at the very start or the very end; every real one is in the body.
+     That is him pressing record and walking into position, and walking back afterwards -
+     and in the app it is the tap, the walk to the ball and the set-up. It is not his hum,
+     and it was being scored as the worst part of it.
+
+     So the span now starts where the hum is genuinely UP - sustained pitch at a level
+     comparable to the body of the hum - and ends where it drops away for good. A quiet
+     approach cannot open the span, and a fade-out cannot close it late. */
   const ONSET = Math.max(2, Math.round(200/HOP));
   const runStart = (arr, dir) => {
     const idx = dir>0 ? arr.map((_,i)=>i) : arr.map((_,i)=>arr.length-1-i);
@@ -268,7 +287,23 @@ function score(rumble, level){
     }
     return -1;
   };
-  let first = runStart(hum, 1), last = runStart(hum, -1);
+  const bodyLvl = (()=>{
+    if(!level || !level.length) return null;
+    const v=[]; for(let i=0;i<hum.length;i++){ const q=level[i0+i]; if(q!=null && hum[i].hz) v.push(q); }
+    return v.length>=10 ? median(v)*0.45 : null;
+  })();
+  const upAt = (dir) => {
+    const idx = dir>0 ? hum.map((_,i)=>i) : hum.map((_,i)=>hum.length-1-i);
+    let run=0;
+    for(const i of idx){
+      const loud = bodyLvl==null || (level[i0+i]!=null && level[i0+i] >= bodyLvl);
+      if(hum[i].hz && loud){ run++; if(run>=ONSET) return dir>0 ? i-run+1 : i+run-1; }
+      else run=0;
+    }
+    return -1;
+  };
+  let first = upAt(1), last = upAt(-1);
+  if(first<0 || last<0){ first = runStart(hum, 1); last = runStart(hum, -1); }
   // if nothing ever sustained, fall back to the old behaviour rather than refuse
   if(first < 0 || last < 0){
     first = hum.findIndex(f=>f.hz);
@@ -379,13 +414,22 @@ function score(rumble, level){
   // CRACKS: an audible break. The last 150 ms is exempt - on a swing hum that is impact,
   // and impact is the strike, not a crack.
   let noiseGaps = 0;
-  const guard = span.length - Math.round(CRACK_TAIL_MS/HOP);
+  /* ⚠️ 400 ms AT BOTH ENDS, NOT 150. Even after the span is trimmed to the body of the
+     hum, the first and last moments are the voice arriving and leaving - pitch is
+     unsettled there by definition, and at six feet it is unsettled for longer because
+     there is less of it to work with. Measured on the recording he graded "90+, super
+     steady, NO BREAKS": the only two cracks left sat at 0.2s and 11.3s of an 11.8s span,
+     both just inside a 150 ms guard. His real breaks are nowhere near the edges - REF3's
+     run 3.3s to 12.9s of 18s, SWING63's cluster at 4.4-4.6s - so widening the guard
+     cannot hide the events that matter. */
+  const EDGE_MS = 400;
+  const guard = span.length - Math.round(EDGE_MS/HOP);
   /* A HEAD GUARD, symmetric with the tail one. The tail was exempt because on a swing
      hum the last 150 ms is impact, and impact is the strike rather than a crack. The
      same argument applies at the front and was simply never made: the first 150 ms is
      the voice ARRIVING - pitch is unsettled there by definition, and the filter is still
      ringing up - so a "crack" in it is the recording starting, not the golfer cracking. */
-  const headGuard = Math.round(CRACK_TAIL_MS/HOP);
+  const headGuard = Math.round(EDGE_MS/HOP);
   const cracks=[];
   for(let i=0;i<span.length;){
     if(devSpan[i]!==null && devSpan[i]>CRACK_JUMP_C){

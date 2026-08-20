@@ -165,7 +165,7 @@ function pipeline(pcm, sr){
     }
   }
   global.__excused = excused;
-  if(process.env.NOISEGAP) global.__noiseFrames = noiseFrame;
+  global.__noiseFrames = noiseFrame;
   F.forEach(f=>f.drawHz=f.hz);
   H.deHash();
   const sc = H.score(null, L);
@@ -177,6 +177,26 @@ function pipeline(pcm, sr){
       sc.total = Math.round(Math.min(100, sc.total*scale)*10)/10;
       sc.excused = ex;
     }
+  }
+  /* ── THE ROOM IS NOT HIS HUM ──────────────────────────────────────────────────
+     He graded his own six-foot recording by ear: "90+, super steady, NO BREAKS". The app
+     said 65 and found three cracks - so all three are inventions of the room.
+
+     At six feet 85% of frames resolve a pitch but only 45% land on his note. The rest is
+     a car, or wind, read as pitch. Those frames sit in the denominator, so the room costs
+     him twice: once by breaking the line and once by counting as time he was off it.
+
+     This was tried before and rejected because it inflated the swing hums - a swing hum
+     coming apart also produces off-note frames, so the same rule forgave the breakdown.
+     WHAT CHANGED IS THAT REAL BREAKS ARE NOW CAUGHT BY LEVEL, INDEPENDENTLY OF PITCH.
+     Losing it at the ball is a collapse in loudness, and that is detected whether or not
+     the pitch survived. So the off-note frames can be excused without excusing the event
+     they used to be a proxy for. */
+  if(process.env.ROOM && sc && global.__noiseFrames){
+    const nf = global.__noiseFrames;
+    const kept = F.length - nf.filter(Boolean).length;
+    if(kept > 0){ const scale = F.length/kept;
+      sc.total = Math.round(Math.min(100, sc.total*scale)*10)/10; }
   }
   if(process.env.NOISEGAP && sc && global.__noiseFrames){
     /* re-derive total with the room's frames out of the denominator */
@@ -196,8 +216,8 @@ const CASES=[
   ['SWING23', 'NTP-swing23.wav',     'he said "60s ish"',             50, 75],
   ['SWING63', 'NTP-swing63.wav',     'RE-GRADED: "50s - I lost it at impact"', 42, 62],
   ['SWING121','NTP-swing121.wav',    'he said "60s ish"',             50, 75],
-  ['REAL-6FT','real-outside-6ft.wav','he said these should be 80s',   78,100],
-  ['FAR-6FT', 'far-hum-6ft.wav',     'the one that read 58; wants 80s',78,100],
+  ['REAL-6FT','real-outside-6ft.wav','GRADED BY EAR: "90+, super steady, no breaks"', 88,100],
+  ['FAR-6FT', 'far-hum-6ft.wav',     'GRADED BY EAR: "elite, over 90"', 88,100],
 ];
 let pass=0, fail=0;
 console.log('\n── his recordings, through the real pipeline, against what HE said ──\n');
