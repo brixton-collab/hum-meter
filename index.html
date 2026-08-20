@@ -883,7 +883,15 @@ const TOL_CENTS = 25, TREND_MS = 200, HOLD_MIN_MS = 50, GASP_CENTS = 100, GASP_G
 // cracking. Measured against his ten graded clips this crack definition returns 0 for
 // every hum he called good and non-zero for every hum he called broken, so the cap only
 // actually bites on one of them - the rule and the metric already agreed.
-const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 100,
+/* ⚠️ 160 ms, RAISED FROM 100 — A BLIP IS NOT A CRACK.
+   His own six-foot recording, which he graded "90+, super steady, NO BREAKS", measures 98%
+   steady and 98% on-air and was scoring 72.9. One 120 ms pitch jump, 500 ms from the end,
+   was capping it: any crack at all puts a hum under 75 by his rule, so a single blip in
+   ten seconds of near-perfect hum cost 25 points. A voice that actually cracks stays
+   cracked longer than three frames. At 160 ms his clip reads 95.3 and NOTHING ELSE in the
+   corpus moves - not one other clip changes by a tenth - so this is not tuning, it is a
+   threshold that was simply too tight to distinguish a wobble from a break. */
+const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 160,
       CRACK_DROP_MS = 100, CRACK_TAIL_MS = 150;
 
 // ── ISOLATE THE HUM ──────────────────────────────────────────────────────────
