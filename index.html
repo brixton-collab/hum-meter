@@ -1,179 +1,210 @@
-<meta charset="utf-8">
-<title>Hum Meter</title>
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hum Board</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎵</text></svg>">
 
 <style>
-  :root{
-    --bg:#0b0f14; --panel:#121924; --line:#1e2a3a;
-    --ink:#f2f6fb; --dim:#8ea3bd;
-    --go:#2fe08a; --ok:#7fd4ff; --warn:#ffc857; --bad:#ff5c5c;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
-    -webkit-font-smoothing:antialiased;padding:20px 16px 40px;
-    display:flex;flex-direction:column;align-items:center;min-height:100vh}
-  .wrap{width:100%;max-width:440px}
-  h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
-    font-weight:600;margin:0 0 4px}
-  .sub{color:var(--dim);font-size:14px;margin:0 0 20px}
-  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;
-    padding:14px;margin-bottom:16px}
-  canvas{width:100%;height:320px;display:block;border-radius:10px;background:#0d1420}
-  .hz{display:flex;justify-content:space-between;align-items:baseline;
-    margin-top:10px;font-variant-numeric:tabular-nums}
-  .hz b{font-size:26px;font-weight:700}
-  .hz span{color:var(--dim);font-size:13px;letter-spacing:.08em;text-transform:uppercase}
-  button{width:100%;padding:20px;border:0;border-radius:14px;background:var(--go);
-    color:#062015;font-size:18px;font-weight:700;letter-spacing:.02em;
-    cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none}
-  button:disabled{opacity:.45}
-  button.rec{background:var(--bad);color:#fff}
-  .hint{color:var(--dim);font-size:13px;text-align:center;margin-top:10px}
-  .result{display:none;margin-top:16px}
-  .result.on{display:block}
-  .score{text-align:center;padding:22px 14px;border-radius:16px;
-    background:var(--panel);border:1px solid var(--line)}
-  .score .n{font-size:64px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
-  .score .band{font-size:15px;letter-spacing:.18em;text-transform:uppercase;
-    font-weight:700;margin-top:8px}
-  .score .say{color:var(--dim);font-size:14px;margin-top:10px}
-  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}
-  td{padding:9px 0;border-bottom:1px solid var(--line);color:var(--dim)}
-  td:last-child{text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
-  tr:last-child td{border-bottom:0}
-  .foot{color:var(--dim);font-size:12px;line-height:1.6;margin-top:18px;text-align:center}
-  .cardhint{color:var(--dim);font-size:13px;text-align:center;margin:22px 0 8px}
-  .escape{display:none;margin-top:16px;padding:16px;border-radius:14px;
-    background:var(--panel);border:1px solid var(--warn)}
-  .escape.on{display:block}
-  .escape b{color:var(--ink)}
-  .escape>b{display:block;font-size:17px;margin-bottom:6px}
-  .escape p{color:var(--dim);font-size:14px;margin:0 0 12px}
-  .escape code{display:block;background:#0d1420;border:1px solid var(--line);
-    border-radius:8px;padding:12px;font-size:14px;color:var(--ok);
-    word-break:break-all;-webkit-user-select:all;user-select:all;margin-bottom:12px}
-  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);
-    font-size:15px;padding:14px}
-  .lvl{height:6px;border-radius:3px;background:#0d1420;margin-top:10px;overflow:hidden}
-  .lvl i{display:block;height:100%;width:0%;background:var(--go);
-    border-radius:3px;transition:width .06s linear}
-  .lvl i.hot{background:var(--warn)}
-  .how{margin:14px 0 12px;padding:0 0 0 20px;color:var(--dim);font-size:14.5px;line-height:1.55}
-  .how li{margin:7px 0}
-  .how b{color:var(--ink)}
-  .diag{margin-top:18px;display:flex;flex-direction:column;gap:8px;align-items:center}
-  .diag span{color:var(--dim);font-size:12px}
-  .diag button{font-size:13px;padding:11px}
-  /* The card is the share loop. A download link is useless here — an in-app browser
-     will block the save — but every phone screenshots, so the card is built to BE
-     screenshotted: 4:5, big number, the trace, and where it came from. */
-  #card{width:100%;height:auto;display:block;border-radius:14px;border:1px solid var(--line)}
-</style>
+:root{
+  --bg:#0b0f14; --card:#141a23; --line:#1e2733; --ink:#eef3f9; --dim:#8ea3bd;
+  --go:#3ef2a0; --ok:#7fd4ff; --warn:#ffc857; --bad:#ff6b6b; --accent:#3ef2a0;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;
+  padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 76px)}
+.wrap{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:19px;margin:0;letter-spacing:-.01em}
+.sub{color:var(--dim);font-size:13px;margin-top:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.btn{display:block;width:100%;padding:16px;border-radius:12px;background:var(--accent);
+  color:#06251a;font-weight:700;font-size:17px;text-align:center}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);font-weight:600}
+.btn.rec{background:var(--bad);color:#fff}
+canvas{width:100%;height:300px;display:block;border-radius:10px;background:#0d1420}
+.score{font-size:64px;font-weight:800;line-height:1;letter-spacing:-.03em}
+.band{font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;margin-top:4px}
+.say{color:var(--dim);font-size:14px;margin-top:10px}
+.rowm{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.m{background:#0f1620;border:1px solid var(--line);border-radius:10px;padding:10px}
+.m b{display:block;font-size:10px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;font-weight:700}
+.m span{font-size:15px;font-weight:600}
+.how{margin:12px 0 10px;padding:0 0 0 20px;color:var(--dim);font-size:14px;line-height:1.55}
+.how li{margin:6px 0}.how b{color:var(--ink)}
+nav{position:fixed;bottom:0;left:0;right:0;background:#0d131b;border-top:1px solid var(--line);
+  display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:20}
+nav button{flex:1;padding:14px 4px;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--dim)}
+nav button.on{color:var(--accent)}
+.view{display:none}.view.on{display:block}
+.hint{color:var(--dim);font-size:13px}
+.warnbox{background:#3a2a12;border:1px solid #6b4d18;color:#ffd98a;border-radius:12px;padding:14px;margin:12px 0}
+.warnbox b{display:block;margin-bottom:4px;color:#ffc857}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:10px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;
+   padding:6px 4px;border-bottom:1px solid var(--line);font-weight:700}
+td{padding:9px 4px;border-bottom:1px solid #161d27}
+tr.me td{background:#10241d}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700}
+/* ONE ROW, no wrap, no scrolling. Brixton: "to scroll down and mark the shot is going
+   to be really too hard." He is rating a shot he just hit, phone in one hand, club in
+   the other - if it takes a scroll and a hunt it does not get tapped, and an untapped
+   rating is a missing row in the only dataset that matters. */
+.skey{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px;color:var(--dim)}
+.skey td{padding:3px 0;vertical-align:top}
+.skey td:first-child{width:26px;color:var(--ink);font-weight:800}
+.strike{display:flex;gap:3px;margin-top:10px}
+.strike button{flex:1 1 0;min-width:0;padding:14px 0;border-radius:8px;background:#0f1620;
+  border:1px solid var(--line);font-weight:700;font-size:15px;line-height:1}
+.strike button.sel{background:var(--accent);color:#06251a;border-color:var(--accent)}
+input{width:100%;padding:12px;border-radius:10px;background:#0f1620;border:1px solid var(--line);
+  color:var(--ink);font:inherit}
+.spark{width:100%;height:80px;display:block}
+.big{font-size:30px;font-weight:800;letter-spacing:-.02em}
+code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
+</style></head><body>
 
 <div class="wrap">
-  <h1>The Hum Meter</h1>
-  <p class="sub">How steady is your hum through a golf swing? Hum one note and find out.</p>
-
-  <!-- The three steps, before anything else on the page.
-       Someone arriving from Instagram has no idea this is meant to be used with a club
-       in their hands and the phone on the ground - and if they hum into it sitting on a
-       sofa, the number is real but the point is lost. Two sentences fix that, and they
-       have to come BEFORE the button, not after. -->
-  <ol class="how">
-<!-- ⚠️ DO NOT PUT THE PHONE BACK ON THE GROUND. Flat on the turf is what produces the
-     octave failure: the ground returns the voice about three feet late, which is near half
-     the pitch period, and autocorrelation then answers an octave low. 11 of the first 56
-     hums in the database were graded on that phantom note and NOT ONE cleared 65.3. The
-     page was teaching people into the bug. Leaning it up removes the reflection. -->
-    <li><b>Lean your phone up</b> against your bag or a club, screen facing you — not flat on the ground.</li>
-    <li><b>Tap start, then hum one note</b> — all the way through your backswing,
-        the ball, and your finish. Don’t stop when you hit it.</li>
-    <li><b>Pick it up and look.</b> It stops on its own when you go quiet.</li>
-  </ol>
-  <p class="hint" style="margin:-4px 0 14px">
-    No club handy? Hum one steady note for a few seconds. It still scores it.
-  </p>
-
-  <div class="stage">
-    <canvas id="cv"></canvas>
-    <div class="hz"><b id="note">—</b><span id="state">ready</span></div>
-    <!-- The level bar exists so "it doesn't pick up my hum" is answerable without a
-         cable and a laptop. Bar moving but no Hz = the mic is fine, pitch detection is
-         failing. Bar dead = the mic never opened. Two completely different bugs that
-         look identical from the outside. -->
-    <div class="lvl"><i id="lvlbar"></i></div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div><h1>Hum Board</h1><div class="sub" id="who">—</div></div>
+    <button class="btn ghost" style="width:auto;padding:8px 12px;font-size:13px" id="editname">Name</button>
   </div>
 
-  <button id="go">Tap to start humming</button>
-  <p class="hint" id="hint">Tap once, hum, then swing. It stops on its own when you go quiet.</p>
+  <!-- ── HUM ───────────────────────────────────────────────────────────── -->
+  <section class="view on" id="v-hum">
+    <!-- FIRST RUN. Someone arriving cold has no idea this is meant to be used with a
+         club in their hands and the phone on the ground - and if they hum sitting on a
+         sofa the number is real but the point is lost. Shown once, then never again;
+         a wall you have to dismiss every visit is worse than no wall. -->
+    <div class="card" id="firstrun" style="display:none;border-color:#1e4436;background:#101c18">
+      <b style="font-size:15px">Hum through your swing. See where it breaks.</b>
+      <ol class="how">
+<!-- ⚠️ HE OVERRULED THE "LEAN IT UP" WORDING 2026-08-20 - on the ground is how it is
+     actually used and the copy has to match that. The octave failure the ground causes is
+     now CAUGHT by registerGuard() rather than prevented by the instructions: a ground
+     bounce gets refused with a re-take prompt instead of a wrong low score. -->
+        <li>Put your phone on the ground next to your ball, <b>screen up</b>.</li>
+        <li><b>Tap start and make a swing.</b> Hold one hum through the ball —
+            don’t stop when you hit it.</li>
+        <li><b>Pick your phone up</b> and see your score. It stops on its own.</li>
+      </ol>
+      <div class="hint" style="border-top:1px solid #1e4436;padding-top:10px;margin-top:4px">
+        <b style="color:var(--ink)">Where your hum breaks is where your tension is.</b>
+        Keep a steadier hum and your score goes up. That is the whole game.
+      </div>
+      <button class="btn" id="firstok" style="margin-top:12px">Got it</button>
+    </div>
+    <div id="blocker"></div>
+    <div class="card">
+      <canvas id="cv"></canvas>
+      <div id="live" class="hint" style="margin-top:10px">Keep a steady hum through the entire swing.</div>
+    </div>
+    <button class="btn" id="go">Tap once, then hum</button>
+    <!-- The intro already covered the setup. Repeating it here is noise on every
+         single visit forever, for one visit's worth of value. -->
+    <div class="hint" style="margin-top:10px;text-align:center">It stops on its own.</div>
 
-  <div class="escape" id="escape">
-    <b>Open this in Safari instead</b>
-    <p>Tap the <b>⋯</b> or <b>↗</b> menu at the top of this screen and choose
-       <b>“Open in browser”</b>. Or copy the address and paste it into Safari:</p>
-    <code id="url"></code>
-    <button id="copy" class="ghost">Copy the link</button>
-  </div>
-
-  <div class="result" id="res">
-    <div class="score">
-      <div class="n" id="sc">—</div>
+    <div class="card" id="res" style="display:none">
+      <button id="sendrec" style="width:100%;margin-bottom:10px;padding:12px;border:0;
+        border-radius:10px;background:#2a3550;color:#cfe0ff;font:inherit;font-size:15px">
+        📤 Send Harry this recording</button>
+      <div class="score" id="sc">—</div>
       <div class="band" id="bd"></div>
       <div class="say" id="sy"></div>
-    </div>
-    <table>
-      <tr><td>Your note</td><td id="m0">—</td></tr>
-      <!-- Deliberately only three rows. "Tone purity" measured the microphone more than
-           the voice and meant nothing to a golfer, and a separate "Steadiness 91/100"
-           next to a score of 68 reads as a contradiction - they are different questions
-           and nobody should have to know that. The score IS the steadiness. -->
-      <tr><td>Where it cracked</td><td id="m1">—</td></tr>
-      <tr><td>Through the ball</td><td id="m4">—</td></tr>
-
-    </table>
-
-    <!-- The ask. It goes AFTER the score, never before: they have something of their
-         own now, so posting it is showing off rather than doing him a favour. -->
-    <div id="cta" style="display:none;margin:16px 0;padding:14px;border-radius:12px;
-         background:#12241c;border:1px solid #1e4436">
-      <!-- REACH, and why this ask and not a tag.
-           "Screenshot it and tag me" asks a stranger for a favour and DEAD-ENDS: one
-           person, one post, maybe. It does not compound. Sending it to the guy you play
-           with costs them nothing, is the most natural thing in golf - it is a bet - and
-           every send creates another user who can send it again. That is the difference
-           between 100 a day and 100 a day that grows.
-           The tag ask still happens; it just is not the thing being asked for. -->
-      <b style="color:#3ef2a0">Send this to whoever you play with.</b>
-      <div style="opacity:.88;font-size:14px;margin-top:4px">
-        See if they can hold theirs through the ball.
+      <div class="rowm">
+        <!-- No Hz. "118 Hz" is a fact about physics, not about their golf swing, and
+             a row that needs explaining costs more trust than it earns. -->
+        <div class="m"><b>Through the ball</b><span id="m2">—</span></div>
+        <div class="m"><b>Cracks</b><span id="m3">—</span></div>
       </div>
-      <button id="share" class="ghost" style="margin-top:12px;width:100%">
-        📋 Copy the link
-      </button>
+      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+        <b style="font-size:13px">How was that strike?</b>
+        <!-- His scale, verbatim: 0 terrible, under 5 fat, 8 a pretty good strike,
+             10 perfectly flush. The anchors matter more than the buttons - "7 or 8?"
+             is unanswerable without them, and an unanswerable question gets skipped,
+             and a skipped rating is a missing row in the only dataset that matters. -->
+        <!-- Four rows, not two columns. A golfer is matching a shot they just hit
+             against a description, and a description is a sentence - stacked, they scan;
+             side by side, they collide. His wording throughout: the anchors are outcomes
+             ("would be on the putting green"), not adjectives, which is what makes a
+             number pickable in two seconds with a club still in your hand. -->
+        <table class="skey">
+          <tr><td>0</td><td>borderline chunk / whiff</td></tr>
+          <tr><td>5</td><td>20 yards short of the green, or over it</td></tr>
+          <tr><td>8</td><td>solid strike — would be on the putting green</td></tr>
+          <tr><td>10</td><td>perfectly flush</td></tr>
+        </table>
+        <div class="strike" id="strike"></div>
+        <div class="hint" id="strikeDone" style="margin-top:8px;display:none"></div>
+      </div>
+      <!-- SHARE — pulled out on purpose, 2026-08-19. Brixton on the You-vs-Brixton
+           card: "I just don't think that's something people are going to share." He is
+           probably right, and a share button nobody taps is worse than none: it takes up
+           the most valuable space on the page (directly under a score they just earned)
+           and teaches them the page has nothing more to offer. drawShareCard() and the
+           card renderer are left intact below - the mechanic is what was wrong, not the
+           drawing - so it can come straight back once there is a reason to tap it. -->
     </div>
+  </section>
 
-    <div id="roughNote" style="display:none;margin:10px 0;padding:10px;border-radius:9px;
-         background:#3a2a12;border:1px solid #6b4d18;color:#ffd98a;font-size:13px"></div>
-
-    <p class="cardhint">Screenshot this to share it</p>
-    <canvas id="card"></canvas>
-
-    <!-- Calibration is currently built from 14 Instagram-compressed hums by about five
-         different people. A live hum into a good phone mic in a quiet room is a
-         different population, and the honest way to fix "the score reads low" is to
-         measure his real attempts rather than nudge a constant until it feels right. -->
-    <!-- Calibration diagnostics. These were for one person and read like nonsense to a
-         stranger ("Copy my numbers for Harry"), so they are hidden unless the URL says
-         ?debug=1. The scores are logged server-side now anyway, which is what the button
-         was really for. -->
-    <div class="diag" id="diag" style="display:none">
-      <span id="dcount">0 attempts this session</span>
-      <button id="dcopy" class="ghost">Copy the raw numbers</button>
+  <!-- ── MY BOARD ──────────────────────────────────────────────────────── -->
+  <section class="view" id="v-me">
+    <div class="card">
+      <div class="rowm" style="margin-top:0">
+        <div class="m"><b>Your best</b><span class="big" id="myBest">—</span></div>
+        <div class="m"><b>Your average</b><span class="big" id="myAvg">—</span></div>
+      </div>
+      <div class="rowm">
+        <div class="m"><b>Hums</b><span id="myN">—</span></div>
+        <div class="m"><b>Trend (last 10)</b><span id="myTrend">—</span></div>
+      </div>
+      <canvas class="spark" id="spark"></canvas>
     </div>
-  </div>
+    <div class="card" id="tensionCard">
+      <b style="font-size:13px">Where you lose it</b>
+      <div class="hint" style="margin-top:2px">Every crack you've had, lined up on the ball.</div>
+      <canvas class="spark" id="tension" style="height:120px"></canvas>
+      <div class="hint" id="tensionText" style="margin-top:8px">Needs a few swing hums.</div>
+    </div>
+    <div class="card">
+      <b style="font-size:13px">Your last 10</b>
+      <table style="margin-top:8px"><thead><tr><th>When</th><th>Score</th><th>Cracks</th><th>Strike</th></tr></thead>
+      <tbody id="myRows"><tr><td colspan="4" class="hint">No hums yet.</td></tr></tbody></table>
+    </div>
+    <div class="card" id="strikeCard">
+      <b style="font-size:13px">Does a better hum mean a better strike?</b>
+      <div class="hint" id="corrText" style="margin-top:6px">Rate a few strikes and this fills in.</div>
+      <canvas class="spark" id="scatter" style="height:140px"></canvas>
+    </div>
+  </section>
 
-    <!-- THE MICROPHONE ASK, EVERY SINGLE TIME.
+  <!-- ── LEADERBOARD ───────────────────────────────────────────────────── -->
+  <section class="view" id="v-all">
+    <div class="card">
+      <div class="rowm" style="margin-top:0">
+        <div class="m"><b>Hums measured</b><span class="big" id="allN">—</span></div>
+        <div class="m"><b>Average hum</b><span class="big" id="allAvg">—</span></div>
+      </div>
+      <div class="hint" id="allNote" style="margin-top:10px"></div>
+      <div id="nameAsk" style="display:none;margin-top:12px;padding:12px;border-radius:10px;
+           background:#101c18;border:1px solid #1e4436">
+        <b style="font-size:13px;color:var(--go)">You are on the board as “Unnamed”.</b>
+        <div class="hint" style="margin-top:2px">Add a name and it shows up next to your score.</div>
+        <button class="btn ghost" id="addName" style="margin-top:10px">Add your name</button>
+      </div>
+    </div>
+    <div class="card">
+      <b style="font-size:13px">All-time board</b>
+      <table style="margin-top:8px"><thead><tr><th>#</th><th>Golfer</th><th>Best</th><th>Hums</th></tr></thead>
+      <tbody id="allRows"><tr><td colspan="4" class="hint">—</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <b style="font-size:13px">Most improved</b>
+      <div class="hint" style="margin-top:2px">First 3 hums vs last 3.</div>
+      <table style="margin-top:8px"><thead><tr><th>#</th><th>Golfer</th><th>Gain</th></tr></thead>
+      <tbody id="impRows"><tr><td colspan="3" class="hint">—</td></tr></tbody></table>
+    </div>
+  </section>
+  <!-- THE MICROPHONE ASK, EVERY SINGLE TIME.
        On iOS, Safari re-asks for the microphone on every new browsing session - it is a
        privacy decision by Apple, not something a page can turn off. The one real fix is
        Add to Home Screen: a home-screen web app keeps its permission, and it also opens
@@ -183,122 +214,194 @@
     Tired of the microphone prompt? Tap <b>Share</b> → <b>Add to Home Screen</b>.
     It opens like an app and stops asking.
   </p>
-  <p class="foot">Nothing is uploaded. It all runs on your phone.</p>
 </div>
 
+<nav>
+  <button class="on" data-v="hum">HUM</button>
+  <button data-v="me">MY BOARD</button>
+  <button data-v="all">EVERYONE</button>
+</nav>
+
+<script src="hum-core.js"></script>
 <script>
-// ── Same measurement logic as the desktop scorer, ported to run in a browser.
-// Autocorrelation pitch detection: a hum is a near-perfect periodic signal, which is
-// exactly what autocorrelation is best at — and unlike FFT it stays accurate down at
-// the ~100 Hz where a male hum actually lives.
+/* ═════════════════════════════════════════════════════════════════════════════
+   HUM BOARD — V2
 
-const SR_MIN = 70, SR_MAX = 400;      // plausible hum band
-const JUMP_CENTS = 50;                // pitch move that counts as a crack...
-const JUMP_HOLD_MS = 80;              // ...but only if it STAYS moved this long
-/* ⚠️ TWO CLARITY BARS, AND WHICH ONE APPLIES DEPENDS ENTIRELY ON WHETHER THE AUDIO
-   REACHING THE DETECTOR HAS BEEN FILTERED. They are one decision, not two, and the
-   pair exists because collapsing them into a single number breaks something either
-   way. Lowering the bar GLOBALLY was tried first and the wind suite caught it inside a
-   minute: 4 wrong numbers reported on raw synthetic audio, which is precisely what the
-   note that used to sit here warned about, and it was right at the time: "don't drop CLARITY_MIN to fix loudness - 0.38 is what made noise read
-   as pitch." On RAW audio that is true: lowering the bar just lets the detector find
-   a "pitch" in road rumble. So RAW audio keeps 0.52. Filtered audio gets 0.36, because
-   the filter has already removed the thing that used to fake a pitch.
+   V1 is hum-meter.html: one link, one hum, one score, no memory. It ships today.
+   This is the version with a memory: an identity, a personal board, a strike
+   rating, and a leaderboard.
 
-   Measured on Brixton's own car recordings, after the tight band-pass, and on brown
-   noise with no voice in it at all (which must never read as a held note):
+   THE STORAGE DECISION, because everything else hangs off it.
+   This page works with NO backend at all — every hum is written to localStorage
+   and the board reads from there. Fill in CLOUD below and the exact same code
+   mirrors to a server, which is what makes "your hums on any device" and a real
+   leaderboard possible. Nothing about the UI changes. That is deliberate: it
+   means the thing can go live this week and grow a backend later without a
+   rewrite, instead of waiting on infrastructure to launch at all.
+   ═════════════════════════════════════════════════════════════════════════════ */
 
-     clarity   his car hum          brown noise
-      0.52     42% voiced, 280 ms    27%, 120 ms      <- he was REFUSED here. 400 ms needed.
-      0.44     69% voiced, 360 ms    36%, 160 ms
-      0.36     75% voiced, 440 ms    62%, 200 ms      <- he passes, noise still cannot hold a note
-      0.28     92% voiced, 760 ms    80%, 320 ms
+const CLOUD = {
+  url:  'https://dbuyjntbpqbimkuewegg.supabase.co/rest/v1',
+  key:  'sb_publishable_BbZCc_Yblqrrc-aV6-5ysQ_ooAkGngs',
+  table:'hums'
+};
+// PUBLIC by design - it ships inside the page. Row-level security is what protects
+// the data: add a hum, read the board, attach a strike rating. No deletes, no schema.
+const cloudOn = () => !!(CLOUD.url && CLOUD.key);
 
-   0.36 is the first value where a real hum in a car clears the 400 ms "did it ever hold
-   a note" gate, and brown noise is still nowhere near it, so the gate keeps its meaning.
-   Re-run clarity-sweep.js before changing either number, and NEVER hand CLARITY_FILTERED
-   to a detect() call whose audio has not actually been through the filter. */
-const CLARITY_MIN = 0.52;             // below this the frame isn't a tone (RAW audio)
-const CLARITY_FILTERED = 0.36;        // ...and this is the bar once the audio IS filtered
-/* ⚠️ TWO KNOBS, AND ONLY ONE OF THEM WAS THE PROBLEM. Went 0.55 -> 0.38 to hear soft hums
-   and it was the wrong knob: at 0.38 random background noise correlates just well enough
-   to produce a "pitch", that pitch jumps around, every jump reads as a crack, and the
-   screen filled with red lines on a score of 17. Brixton's recording shows it exactly.
+/* ── IDENTITY ─────────────────────────────────────────────────────────────────
+   No password, no email, no signup screen. A cold Instagram audience will not
+   create an account to try a toy — they bounce, and the dataset never happens.
+   So: a random id minted on first visit, a display name they can set whenever,
+   and a recovery code they can carry to another device. Ask for an email later,
+   once they have a board worth keeping. That is when the trade feels fair.      */
+const IDK='humBoardId', NMK='humBoardName';
+function uid(){ return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+  (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c/4).toString(16)); }
+let ME = localStorage.getItem(IDK) || (localStorage.setItem(IDK, uid()), localStorage.getItem(IDK));
+let NAME = localStorage.getItem(NMK) || '';
+function renderWho(){
+  // Show a name only once there IS one. "Unnamed golfer · 5f716017" told the user two
+  // things they did not ask for and neither of which helps them.
+  /* Ask for a name where it BUYS something, not in the header where it is a chore.
+     "Add your name" at the top of a page you have not used yet is a request with no
+     stated reason - Brixton: "I don't quite get what that's going to do." It only means
+     anything once there is a score to attach it to, so the ask now lives on the
+     leaderboard, and until then the header stays quiet. */
+  const el=document.getElementById('who');
+  el.innerHTML = NAME
+    ? esc(NAME) + ' · <span style="text-decoration:underline;cursor:pointer" id="rec">board code</span>'
+    : '';
+  const r=el.querySelector('#rec');
+  if(r) r.onclick = recoveryUI;
+  const nameBtn = document.getElementById('editname');
+  if(nameBtn) nameBtn.style.display = NAME ? '' : 'none';
+}
+/* ── CARRYING A BOARD TO ANOTHER PHONE ────────────────────────────────────────
+   No account means no password to reset — and also no way to move. The compromise
+   is a recovery code that IS the id: paste it on the new phone and the board comes
+   with you. It is deliberately not a login: nothing is protected by it, so losing it
+   costs a board and never anything else.                                          */
+document.getElementById('editname').ondblclick = null;
+function recoveryUI(){
+  const code = ME;
+  const entered = prompt(
+    'YOUR RECOVERY CODE — save this to move your board to another phone:\n\n' + code +
+    '\n\nTo LOAD a board from another phone, paste its code here and press OK.\n' +
+    'Leave it as-is to keep this one.', code);
+  if(entered && entered.trim() && entered.trim() !== ME){
+    ME = entered.trim(); localStorage.setItem(IDK, ME);
+    renderWho(); paintMe(); paintAll();
+    alert('Loaded.');
+  }
+}
 
-   VOLUME was never gated here - the autocorrelation is normalised, so a quiet hum and a
-   loud one score the same clarity. The thing actually eating soft hums was the RMS
-   silence gate below (0.008, now 0.0010). That one stays low. This one goes back up,
-   because it is the only thing standing between a hum and a room. */
-const CLARITY_GATE = 0.45;            // below this the RECORDING is too rough to score
-// Lowered from 0.62 on 2026-08-19. It was set on quiet-room recordings, and a phone in a
-// moving car (or a golfer at a windy range) sits well under it while still producing a
-// perfectly readable hum. The pitch track either resolves or it does not — `voiced %` and
-// "did it ever hold a note?" already catch the case where it genuinely did not.
-const OCTAVE_OFF_CENTS = 150;         // this far off the note = wrong octave, not vibrato
-const HUSH_MS = 1400;                 // silence this long after a hum = you're done
-// Raised from 900 ms on 2026-08-18, and the reason is the whole point of the product.
-// The hum is meant to run backswing -> STRIKE -> follow-through, and at the strike it
-// often pauses: that pause is the tension we are trying to measure. His own reference
-// hums hold their breath for up to 800 ms. At 900 ms the recorder would have stopped
-// DURING that pause and thrown the follow-through away - deleting the half of the hum
-// that answers the question.
-
-// ── CALIBRATION ──────────────────────────────────────────────────────────────
-// Generated by:  hum-lab.py web        (source of truth: Content/hum-lab/web/calibration.json)
-//
-// Do not hand-edit these. They are percentiles of real measured hums, and the reason
-// the meter scores PITCH ONLY — wobble, drift, and whether it broke.
-//
-// The measures this drops (tone purity, jitter, shimmer) turned out to describe the
-// microphone as much as the voice. The steadiest hum on record, 9.1 cents of wobble,
-// scores in the 50s on the desktop scorer purely because Instagram's compression
-// mangled its harmonics. In a lab where everything comes off one phone that is a
-// quirk. In a link a stranger opens on an unknown handset next to a busy road it is
-// fatal — two people humming identically would get different numbers, and the meter
-// would be grading their hardware. Pitch survives all of that, and "can you hold ONE
-// note" is the question the whole thing is actually about.
-// BANDS ARE BRIXTON'S, set 2026-08-18: 85+ elite, 70-85 clean, 60-70 shaky, under 60
-// needs work. They are deliberately NOT percentiles of this small sample any more — a
-// percentile band moves every time the population changes, so a golfer who hummed the
-// same both times could score the same and be told something different. A fixed
-// standard is what lets 80 -> 82 -> 83 mean actual improvement.
-//
-// The SCALES below stay measured. Fixed bands on measured scales: what "good" means is
-// his call, what the number IS remains evidence.
-//
-// RECALIBRATED 8/18, AFTER de-hashing. The scales moved (wobble p10/p90 11.97/26.04 ->
-// 8.24/19.55) because removing estimator hash removed ~4 cents of fake wobble from every
-// hum in the population. Scores had to be re-anchored or the meter would have called
-// half of everything ELITE. His own "great example" clip lands at 100 under this.
-const CAL = {
-  // REBUILT 2026-08-18 for the steadiness rewrite. The old weights/scales belonged to
-  // wobble+drift and are gone; nothing here is tuned by feel.
-  //
-  // The BANDS are Brixton's, unchanged, and they survived the rewrite untouched — his
-  // three Nail the Pitch reference recordings land 99.6 / 80.9 / 66.2 against them.
-  //
-  // The PERCENTILES are measured, not asserted: 28 real hums (21 population + his 3
-  // references + 4 swing hums) rescored under the new metric. They exist only so
-  // "better than X% of hums measured" is a true sentence. Recompute them with
-  // hum-steady.py whenever the population grows — never hand-edit.
-  //
-  // There is no scale left to calibrate. The score is a direct physical measurement —
-  // the % of the span you spent on your own line — not a percentile of a population,
-  // so "you held your line 88% of the time" means the same thing in week 1 and week 30.
-  "bands":   { "ELITE": 85, "CLEAN": 70, "SHAKY": 60 },
-  "percentiles": {"5": 66.0, "10": 67.6, "25": 71.3, "50": 77.5, "75": 83.4, "90": 94.9, "95": 96.0}
+document.getElementById('editname').onclick = () => {
+  const n = prompt('What should the board call you?', NAME||'');
+  if(n===null) return;
+  NAME = n.trim().slice(0,24); localStorage.setItem(NMK, NAME); renderWho();
+  Store.renameAll(NAME); paintMe(); paintAll();
 };
 
-const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let frames = [], running = false, ac, stream, t0, sampleRate = 44100, heard = false, quietRun = 0, rumbleTrack = [], hiTrack = [], pcmLog = [], refNote = 0, tunedTo = 0, hp1, hp2, lp1, lvlLog = [], loudRef = 0;
+/* ── STORE ────────────────────────────────────────────────────────────────────
+   One interface, two backings. Local always writes (so the board is instant and
+   works on a plane); cloud mirrors when configured and is the source of truth for
+   anything involving other people.                                              */
+const LSK='humBoardHums';
+const Store = {
+  localAll(){ try{ return JSON.parse(localStorage.getItem(LSK)||'[]'); }catch(e){ return []; } },
+  localPut(rows){ localStorage.setItem(LSK, JSON.stringify(rows.slice(-500))); },
 
-function fit(){ const r = cv.getBoundingClientRect(), d = devicePixelRatio||1;
-  cv.width = r.width*d; cv.height = r.height*d; ctx.setTransform(d,0,0,d,0,0); draw(); }
-addEventListener('resize', fit);
+  async add(rec){
+    const rows = this.localAll(); rows.push(rec); this.localPut(rows);
+    if(cloudOn()){
+      try{
+        await fetch(CLOUD.url+'/'+CLOUD.table, {method:'POST',
+          headers:{'Content-Type':'application/json', apikey:CLOUD.key,
+                   Authorization:'Bearer '+CLOUD.key, Prefer:'return=minimal'},
+          body: JSON.stringify(rec)});
+      }catch(e){ /* offline is fine — the local copy is authoritative for MY board */ }
+    }
+    return rec;
+  },
 
-// `floor` raises the lowest pitch the search may return. Passing it is how the octave
-// resolver asks the same audio a second question: with the subharmonic ruled out, is
-// the note still there?
+  async patch(id, fields){
+    const rows=this.localAll(); const r=rows.find(x=>x.hum_id===id);
+    if(r) Object.assign(r, fields);
+    this.localPut(rows);
+    if(cloudOn()){
+      try{ await fetch(CLOUD.url+'/'+CLOUD.table+'?hum_id=eq.'+id, {method:'PATCH',
+        headers:{'Content-Type':'application/json', apikey:CLOUD.key,
+                 Authorization:'Bearer '+CLOUD.key, Prefer:'return=minimal'},
+        body: JSON.stringify(fields)}); }catch(e){}
+    }
+  },
+
+  renameAll(name){
+    const rows=this.localAll(); rows.forEach(r=>{ if(r.player_id===ME) r.name=name; });
+    this.localPut(rows);
+    if(cloudOn()){ fetch(CLOUD.url+'/'+CLOUD.table+'?player_id=eq.'+ME, {method:'PATCH',
+      headers:{'Content-Type':'application/json', apikey:CLOUD.key,
+               Authorization:'Bearer '+CLOUD.key, Prefer:'return=minimal'},
+      body: JSON.stringify({name})}).catch(()=>{}); }
+  },
+
+  mine(){ return this.localAll().filter(r=>r.player_id===ME)
+              .sort((a,b)=> a.at < b.at ? 1 : -1); },
+
+  /* Everyone. Without a backend this can only ever be the hums on THIS device, and
+     the UI says so rather than pretending a leaderboard of one is a leaderboard.  */
+  async everyone(){
+    if(!cloudOn()) return { rows: this.localAll(), local:true };
+    try{
+      // Deletes are deliberately not permitted by the row-level policies - nobody can
+      // wipe the data, which also means the wiring-test row cannot be removed. Filter it
+      // out at read time instead.
+      const r = await fetch(CLOUD.url+'/'+CLOUD.table+'?select=*&order=at.desc&limit=5000',
+        {headers:{apikey:CLOUD.key, Authorization:'Bearer '+CLOUD.key}});
+      const all = await r.json();
+      return { rows: Array.isArray(all) ? all.filter(x=>x.source!=='wiring-test-ignore') : [], local:false };
+    }catch(e){ return { rows:this.localAll(), local:true }; }
+  }
+};
+
+/* ── THE THING THAT SILENTLY KILLS A BIO LINK ────────────────────────────────
+   A link tapped INSIDE Instagram opens in Instagram's own webview, and on iOS that
+   webview refuses microphone access outright. The page loads, the button works, and
+   nothing happens — so it reads as broken rather than as blocked, and the visitor
+   leaves without ever knowing why.
+
+   It is invisible from a desktop test, which is exactly why it has to be handled in
+   code rather than remembered. V1 has carried this since day one; the board did not,
+   and the board is the link about to go in a bio.                                   */
+function inAppBrowser(){
+  const ua = navigator.userAgent || '';
+  return /Instagram|FBAN|FBAV|FB_IAB|Line\/|Twitter|TikTok|Snapchat|LinkedInApp/i.test(ua);
+}
+function insecure(){
+  return !window.isSecureContext && !['localhost','127.0.0.1'].includes(location.hostname);
+}
+function showBlocker(){
+  if(!inAppBrowser() && !insecure()) return false;
+  const url = location.href;
+  document.getElementById('blocker').innerHTML =
+    '<div class="warnbox"><b>Open this in your browser</b>' +
+    (insecure()
+      ? 'This page needs a secure connection to reach the microphone.'
+      : 'You are inside the Instagram browser, and it will not let a web page use your ' +
+        'microphone. Tap the <b>⋯</b> or <b>↗</b> menu at the top of this screen and choose ' +
+        '<b>“Open in browser”</b> — everything works normally there.') +
+    '<div style="margin-top:10px;font-size:12px;word-break:break-all;opacity:.85">' + url + '</div>' +
+    '<button class="btn ghost" id="copyurl" style="margin-top:10px">Copy the link</button></div>';
+  const c = document.getElementById('copyurl');
+  if(c) c.onclick = async () => {
+    try{ await navigator.clipboard.writeText(url); c.textContent='Copied — paste it in Safari'; }
+    catch(e){ c.textContent = url; }
+  };
+  document.getElementById('go').style.display='none';
+  return true;
+}
+
 /* ── FILTERING: the single biggest accuracy win in this whole project ─────────
    Measured on Brixton's own recording, humming in the back of a car at 70 mph:
 
@@ -341,7 +444,7 @@ function retrack(pcm, sr, hopMs, winN){
   const read = sig => {
     const out=[];
     for(let i=0; i+winN<=sig.length; i+=step){
-      const d = detect(Float32Array.from(sig.subarray(i,i+winN)), sr, SR_MIN, CLARITY_FILTERED);
+      const d = H.detect(Float32Array.from(sig.subarray(i,i+winN)), sr, H.SR_MIN, H.CLARITY_FILTERED);
       out.push(d ? {hz:d.hz, clarity:d.clarity} : null);
     }
     return out;
@@ -363,1256 +466,144 @@ function retrack(pcm, sr, hopMs, winN){
 
      So: anchor on the octave-aware note, try the octave above it as well, and keep
      whichever pass actually hears more of the voice - pass 1 included. */
-  const note = anchorNote(got) || got[got.length>>1];
+  const note = H.anchorNote(got) || got[got.length>>1];
   let best = pass1;
   for(const c of [note, note*2]){
-    if(!c || c > SR_MAX) continue;
+    if(!c || c > H.SR_MAX) continue;
     const p = read(tightBand(pcm, sr, c));
     if(on(p) > on(best)) best = p;
   }
   return best;
 }
 
-function detect(buf, sr, floor, cmin){
-  // remove DC, check we have signal at all
-  let mean=0; for(let i=0;i<buf.length;i++) mean+=buf[i]; mean/=buf.length;
-  let rms=0; for(let i=0;i<buf.length;i++){ buf[i]-=mean; rms+=buf[i]*buf[i]; }
-  rms=Math.sqrt(rms/buf.length);
-  /* ⚠️ THIS NUMBER DECIDES WHETHER A SOFT HUM EXISTS AT ALL, and it was far too high.
-     At 0.008 a gentle hum with the phone on the ground never reached the pitch detector -
-     the frame was discarded as "silence" before anything looked at it, and no amount of
-     loosening the gates downstream could bring it back. Brixton: "it's not picking up, you
-     should pick up on a soft hum, you have to really do it."
-     0.0010 is still above a phone's own noise floor (~0.0005), so silence is
-     still silence - which matters, because the hands-free stop depends on quiet reading
-     as quiet. Clarity is what rejects noise, and clarity is level-independent: the
-     autocorrelation is normalised, so a quiet hum scores the same as a loud one. */
-  if(rms<0.0010) return null;                     // silence
-
-  const lo = Math.max(SR_MIN, floor||SR_MIN);
-  const lagMin=Math.floor(sr/SR_MAX), lagMax=Math.min(Math.floor(sr/lo), buf.length-2);
-  if(lagMax<=lagMin) return null;
-  let best=-1, bestV=0, r0=0;
-  for(let i=0;i<buf.length;i++) r0+=buf[i]*buf[i];
-  for(let lag=lagMin; lag<=lagMax; lag++){
-    let s=0, e=0;
-    for(let i=0;i<buf.length-lag;i++){ s+=buf[i]*buf[i+lag]; e+=buf[i+lag]*buf[i+lag]; }
-    const v = s/Math.sqrt((r0||1)*(e||1));         // normalised → 0..1 clarity
-    if(v>bestV){ bestV=v; best=lag; }
-  }
-  if(best<0 || bestV<(cmin||CLARITY_MIN)) return null;
-
-  // parabolic interpolation for sub-sample accuracy (matters a lot at 100 Hz)
-  const y=l=>{ let s=0; for(let i=0;i<buf.length-l;i++) s+=buf[i]*buf[i+l]; return s; };
-  const a=y(best-1), b=y(best), c=y(best+1);
-  const shift = (a-c) ? 0.5*(a-c)/(a-2*b+c) : 0;
-  return { hz: sr/(best+shift), clarity: bestV, rms };
-}
-
-// The vertical scale, in cents from the middle of the view to the top.
-//
-// This number decides whether an honest hum LOOKS honest, and it was wrong. It was set
-// to 150 on the theory that a tight zoom is what makes wobble visible — but a real
-// pitch monitor plots two and a half OCTAVES down the screen, and the same hum drawn
-// against 300 cents instead of 3000 looks ten times worse than it is. A steady hum has
-// to read as a flat line, because that is what it is; the trace is evidence, and
-// evidence with the gain cranked up is not more informative, just less trustworthy.
-//
-// 350 cents each way is three semitones: wide enough that holding a note reads as
-// holding a note, tight enough that losing it is unmissable.
-const VIEW_CENTS = 350;
-
-/* ── USAGE LOGGING ────────────────────────────────────────────────────────────
-   Fill this in and every hum this page scores is written to a table you can query.
-   Leave it blank and the page works exactly the same, it is simply blind.
-
-   It is here rather than in a separate analytics tool on purpose: the useful number
-   is not "how many visits", it is the SCORES. A hundred people a day humming into
-   this is the calibration population, and it is the same table the V2 board uses -
-   so nothing recorded from day one is wasted when the board goes live.
-   Setup is ~10 minutes: see SETUP-CLOUD.md.                                       */
-const CLOUD = { url:'https://dbuyjntbpqbimkuewegg.supabase.co/rest/v1',
-                key:'sb_publishable_BbZCc_Yblqrrc-aV6-5ysQ_ooAkGngs',
-                table:'hums' };
-// Publishable key, and it is PUBLIC by design - it ships inside the page. Row-level
-// security is what protects the data: the policies allow adding a hum, reading the
-// board, and attaching a strike rating. No deletes, no schema access, nothing else.
-// (Supabase renamed these from 'anon' to 'publishable' in 2025; same thing.)
-const cloudOn = () => !!(CLOUD.url && CLOUD.key);
-const VISITOR = (()=>{ try{
-  let v=localStorage.getItem('humVisitor');
-  if(!v){ v = Math.random().toString(36).slice(2)+Date.now().toString(36);
-          localStorage.setItem('humVisitor', v); }
-  return v; }catch(e){ return 'anon'; } })();
-
-function logHum(s, band){
-  if(!cloudOn()) return;
-  try{
-    fetch(CLOUD.url+'/'+CLOUD.table, {method:'POST', keepalive:true,
-      headers:{'Content-Type':'application/json', apikey:CLOUD.key,
-               Authorization:'Bearer '+CLOUD.key, Prefer:'return=minimal'},
-      body: JSON.stringify({
-        hum_id: Math.random().toString(36).slice(2)+Date.now().toString(36),
-        player_id: VISITOR, name: null, at: new Date().toISOString(),
-        score: +s.total.toFixed(1), band,
-        line: +s.line.toFixed(1), on_air: +s.onAir.toFixed(1),
-        note_hz: +s.note.toFixed(1), note_name: noteOf(s.note).name,
-        jitter: +s.jitter.toFixed(1), tilt: Math.round(s.tilt),
-        cracks: s.cracks.length, tension: s.tension.length,
-        through_impact: null, span_s: +s.span.toFixed(2), strike: null,
-        source: 'v1'
-      })}).catch(()=>{});
-  }catch(e){}
-}
-
-const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
-function noteOf(hz){
-  const midi = Math.round(69 + 12*Math.log2(hz/440));
-  return { name: NOTE_NAMES[(midi%12+12)%12] + (Math.floor(midi/12)-1),
-           hz: 440*Math.pow(2,(midi-69)/12) };
-}
-
-function draw(){
-  const w=cv.clientWidth, h=cv.clientHeight;
-  // Paint the ground rather than clearing to transparent. A cleared canvas looks right
-  // in the browser because the CSS background shows through, but exports (toDataURL,
-  // the share card, a screenshot) come out with a transparent — i.e. white — bed, which
-  // washes the whole trace out.
-  ctx.clearRect(0,0,w,h);
-  ctx.fillStyle='#0d1420'; ctx.fillRect(0,0,w,h);
-  const v = frames.filter(f=>f.hz);
-  const GUT = 40;
-
-  if(v.length<2){
-    ctx.strokeStyle='#182234'; ctx.lineWidth=1;
-    for(let i=1;i<4;i++){ const y=h*i/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
-    return;
-  }
-
-  const med = median(v.map(f=>f.hz));
-
-  // ── THE RANGE ──────────────────────────────────────────────────────────────
-  // The old view was fixed at +/-350 cents and CLAMPED the line to the canvas edge, so a
-  // crack that leapt an octave was drawn as a flat line pinned to the top — the single
-  // most important event in the recording, rendered invisible. Nail the Pitch shows a
-  // wide fixed piano roll precisely so a spike reads as a spike.
-  //
-  // So: keep +/-350c as the floor, because a steady hum must still read as a flat line
-  // and not be stretched to fill the box, but OPEN the view far enough to contain every
-  // excursion. Spikes are drawn in full or they are not evidence.
-  // Floor at +/-VIEW_CENTS so a steady hum reads as a flat line rather than being
-  // stretched to fill the box, but CAP the opening: one stray frame must never be able
-  // to squash the hum into a hairline. A spike past the cap is drawn running off the
-  // edge, which reads as a bigger crack, not a smaller one.
-  // The range is set from the BODY of the hum, not its extremes. Using min/max let a
-  // single surviving subharmonic frame open the view to 13 semitones and squash a
-  // perfect hum into a hairline — measured on his own straight-line reference. Take the
-  // 2nd/98th percentile, floor it at +/-VIEW_CENTS so a steady hum still reads flat
-  // rather than stretched, and cap it at VIEW_MAX. A spike past the cap is DRAWN running
-  // off the edge, which reads as a bigger crack, not a smaller one.
-  const VIEW_MAX = 800;
-  const cAll = frames.map(f=>{ const hz=f.drawHz!==undefined?f.drawHz:f.hz;
-                               return hz ? 1200*Math.log2(hz/med) : null; }).filter(x=>x!==null)
-                     .sort((a,b)=>a-b);
-  const q = t => cAll[Math.min(cAll.length-1, Math.max(0, Math.round(t*(cAll.length-1))))];
-  let lo=Math.min(-VIEW_CENTS, q(0.02)), hi=Math.max(VIEW_CENTS, q(0.98));
-  const pad=(hi-lo)*0.10;
-  lo=Math.max(lo-pad,-VIEW_MAX); hi=Math.min(hi+pad,VIEW_MAX);
-  const yOf = hz => h - ((1200*Math.log2(hz/med))-lo)/(hi-lo)*h;
-
-  // ── THE PIANO ROLL ─────────────────────────────────────────────────────────
-  // Alternating semitone lanes with note names, the way a pitch monitor draws them. The
-  // lanes are what turn "a squiggle" into "you are sitting on B2" — an absolute
-  // reference the eye can judge, instead of a shape floating in space.
-  const centre = noteOf(med);
-  const sLo = Math.floor(lo/100)-1, sHi = Math.ceil(hi/100)+1;
-  ctx.font = '9px -apple-system,system-ui,sans-serif';
-  ctx.textBaseline = 'middle';
-  const dense = (sHi-sLo) > 26;                 // too many lanes to label every one
-  for(let s=sLo; s<=sHi; s++){
-    const hzTop = centre.hz*Math.pow(2,(s+0.5)/12);
-    const hzBot = centre.hz*Math.pow(2,(s-0.5)/12);
-    const yT=yOf(hzTop), yB=yOf(hzBot);
-    if(yB<0 || yT>h) continue;
-    const nm = noteOf(centre.hz*Math.pow(2,s/12));
-    const black = nm.name.includes('\u266F');
-    ctx.fillStyle = black ? 'rgba(255,255,255,.010)' : 'rgba(255,255,255,.026)';
-    ctx.fillRect(GUT, Math.max(0,yT), w-GUT, Math.min(h,yB)-Math.max(0,yT));
-    ctx.strokeStyle = (s===0) ? '#33475f' : '#141d2b';
-    ctx.lineWidth = (s===0) ? 1.4 : 1;
-    ctx.beginPath(); ctx.moveTo(GUT,yB); ctx.lineTo(w,yB); ctx.stroke();
-    const yc=(yT+yB)/2;
-    if(yc>7 && yc<h-7 && (!dense || s%2===0 || s===0)){
-      ctx.fillStyle = (s===0) ? '#9fb4cd' : '#46586e';
-      ctx.fillText(nm.name, 4, yc);
-    }
-  }
-
-  // ── THE LINE ───────────────────────────────────────────────────────────────
-  //
-  // Drawn from the RAW track — before octave correction, before the de-hash median.
-  // That is deliberate, and it is the thing Brixton asked for: "when I make a perfectly
-  // steady hum the line stays perfect. When I don't, you can see it CRACKS."
-  //
-  // The subtlety worth keeping straight: when a hum cracks, the voice goes breathy and
-  // unstable and the pitch tracker loses the fundamental and grabs the SUBHARMONIC. So
-  // the octave-down spike is an artifact in its DEPTH but not in its LOCATION - it marks
-  // a real moment where the note was lost. Suppressing it would delete the evidence.
-  //
-  // So the two are split, and this is the whole design:
-  //     the LINE  is raw     - every spike drawn, at full depth, nothing smoothed
-  //     the SCORE is guarded - a tracking artifact is not charged against you twice
-  //
-  // Thin, mitred, unsmoothed. A hum's jaggedness IS the measurement; a fat rounded
-  // stroke hides exactly what the number is made of.
-  const s = window.__lastScore;
-  const hzOf = f => f.drawHz !== undefined ? f.drawHz : f.hz;
-  ctx.save(); ctx.beginPath(); ctx.rect(GUT,0,w-GUT,h); ctx.clip();
-  ctx.lineWidth=1.5; ctx.lineJoin='miter'; ctx.lineCap='butt';
-  ctx.strokeStyle='#f2f6fb';
-  let pen=false;
-  ctx.beginPath();
-  frames.forEach((f,i)=>{
-    const x = GUT + i/(Math.max(frames.length,1)-1)*(w-GUT);
-    const hz = hzOf(f);
-    if(!hz){ pen=false; return; }
-    const y = yOf(hz);                         // NOT clamped — a spike must be a spike
-    if(!pen){ ctx.moveTo(x,y); pen=true; } else ctx.lineTo(x,y);
-  });
-  ctx.stroke();
-  ctx.restore();
-
-  // ── THE CRACKS ─────────────────────────────────────────────────────────────
-  // Marked where they happened, in the lane where they happened, because "your hum
-  // cracked at 1.4s" is the one thing on screen a golfer can act on.
-  if(s && s.cracks && s.cracks.length){
-    const bad = getComputedStyle(document.documentElement).getPropertyValue('--bad');
-    s.cracks.forEach(c=>{
-      const fi = Math.round(c.at*1000/HOP) + (s.humStart||0);
-      const x = GUT + fi/(Math.max(frames.length,1)-1)*(w-GUT);
-      ctx.strokeStyle=bad; ctx.lineWidth=1.2;
-      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
-      ctx.fillStyle=bad; ctx.beginPath();
-      ctx.moveTo(x-4.5,1); ctx.lineTo(x+4.5,1); ctx.lineTo(x,9); ctx.closePath(); ctx.fill();
-    });
-  }
-}
-
-
-const median=a=>{ const s=[...a].sort((x,y)=>x-y); const m=s.length>>1;
-  return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
-const sd=a=>{ if(a.length<2) return 0; const m=a.reduce((x,y)=>x+y,0)/a.length;
-  return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/a.length); };
-
-// ── the note, in the right octave ────────────────────────────────────────────
-// Fold every frame into one octave and take the circular mean there, then pick the
-// octave the most frames agree with. A plain median cannot do this: when the detector
-// halves for more than half the hum the median follows it down, and the frames that
-// were right become the outliers. That mistake logged a man humming at 63 Hz.
-function robustNote(hz){
-  if(!hz.length) return 0;
-  let sx=0, sy=0;
-  hz.forEach(f=>{ const folded = f * Math.pow(2, -Math.floor(Math.log2(f/100)));
-    const a = 2*Math.PI*Math.log2(folded/100); sx+=Math.cos(a); sy+=Math.sin(a); });
-  let ang = Math.atan2(sy,sx); if(ang<0) ang += 2*Math.PI;
-  const base = 100*Math.pow(2, ang/(2*Math.PI));
-  let best=null;
-  for(let k=-2;k<=2;k++){
-    const cand = base*Math.pow(2,k);
-    if(cand<SR_MIN||cand>SR_MAX) continue;
-    const agree = hz.filter(f=>Math.abs(1200*Math.log2(f/cand))<OCTAVE_OFF_CENTS).length;
-    if(!best||agree>best[0]) best=[agree,cand];
-  }
-  return best ? best[1] : median(hz);
-}
-
-// The note can be wrong even when nothing looks wrong. If the detector halves for the
-// WHOLE hum then every frame agrees with the wrong octave, nothing reads as octave-off,
-// and the resolver below never runs — the meter confidently tells someone humming at
-// 130 Hz that their note is 65. So test the note itself: raise the floor above it and
-// see whether the same audio still has a pitch up there. A hum genuinely down low loses
-// its voicing entirely and stays put, which is what stops every bass hum being lifted.
-/* ── THE OCTAVE LOCK ──────────────────────────────────────────────────────────
-   Brixton, watching the live line while holding one steady note: "these lines are
-   going a little up and down too much for a pretty steady hum."
-
-   He is right, and the movement is not his voice. Autocorrelation has no memory of
-   the note you are already on, so the moment a hum goes breathy the lag at TWICE the
-   period wins and the reading HALVES - the line plunges a full octave and snaps back.
-   Measured on his own board recording: the hum sits in flat plateaus on D#3 and every
-   deep down-spike lands on D#2. Exactly an octave. Every time.
-
-   ⚠️ THIS IS NOT THE BLANKET OCTAVE SNAP THAT WAS TRIED AND REVERTED on 2026-08-18.
-   That one asked "is this frame within 80 cents of an octave?" with nothing to be an
-   octave BELOW - it measured against a median the halved frames had themselves dragged
-   down, so it doubled REAL frames and took his perfect hum from 100 to 75. This one is
-   anchored to a reference note, folds only UPWARD (a subharmonic toward the note, never
-   the reverse), and uses a tight +/-50 cents. A frame sitting ON the note is 0 cents
-   from the reference and 1200 from half of it, so it can never be touched. Vibrato, a
-   glide, a real crack - none of them land within 50 cents of exactly one or two octaves
-   down. Only the artifact does, which is the whole point of anchoring it.            */
-const FOLD_CENTS = 50, FOLD_MAX_FRAMES = 2;
-function foldOctave(hz, ref){
-  if(!hz || !ref) return hz;
-  for(let k=1;k<=2;k++){
-    const up = hz*Math.pow(2,k);
-    if(up <= SR_MAX*1.05 && Math.abs(1200*Math.log2(up/ref)) < FOLD_CENTS) return up;
-  }
-  return hz;
-}
-/* ⚠️ HOW LONG THE DIP LASTS IS WHAT SEPARATES AN ARTIFACT FROM A BREAKING VOICE, and
-   without that test the fold quietly erases the thing it is meant to leave alone.
-
-   An octave drop has two completely different causes. On a steady hum it is the tracker
-   losing the fundamental for a frame or two on a breathy patch - an artifact, and folding
-   it is why his perfect hum draws perfect. But when a voice actually BREAKS it also drops
-   toward the subharmonic, and that one is the measurement, not an error in it.
-
-   Measured: folding every octave dip regardless of length took REF3 - the recording he
-   graded "the hum is lost" - to 85 with ZERO cracks, because every one of its drops got
-   folded back onto the note and stopped being an excursion at all. The fold had deleted
-   his verdict.
-
-   A tracker artifact is brief. A voice coming apart is not. So fold runs of up to two
-   frames (80 ms) and leave anything longer exactly where it is. */
-function foldRun(fr, ref){
-  if(!ref) return;
-  const isOff = f => f.hz && Math.abs(1200*Math.log2(foldOctave(f.hz,ref)/f.hz)) > 1;
-  let i=0;
-  while(i<fr.length){
-    if(!isOff(fr[i])){ i++; continue; }
-    let j=i; while(j<fr.length && isOff(fr[j])) j++;
-    if(j-i <= FOLD_MAX_FRAMES)
-      for(let k=i;k<j;k++) fr[k].hz = foldOctave(fr[k].hz, ref);
-    i=j;
-  }
-}
-/* The reference the fold is anchored to. robustNote is already octave-aware, but on a
-   track where enough frames have halved it can still settle on the low one - so try the
-   octave above and keep whichever the voice actually agrees with more often. */
-function anchorNote(hzList){
-  if(!hzList || hzList.length < 6) return 0;
-  let r = robustNote(hzList);
-  if(!r) return 0;
-  const near = t => hzList.filter(h=>Math.abs(1200*Math.log2(h/t))<60).length;
-  if(r*2 <= SR_MAX && near(r*2) > near(r)) r *= 2;
-  return r;
-}
-/* ── LOCKING THE NOTE, AND WHY CHASING IT IS A FEEDBACK LOOP ──────────────────
-   Brixton, testing outdoors with a road ~300 yards away and light wind: "these are
-   really good hums and they're reading way low, and your graph is fluctuating - it's
-   picking up on other noise, not the hum."
-
-   Measured on that recording, this is what the live filter was locking onto, every
-   three seconds, while he hummed ONE note:
-
-       148 -> 90 -> 127 -> 183 -> 216 -> 124 -> 120 -> 90 -> 98 -> 118 -> 85 Hz
-
-   It never settles. And because the tight band retunes to whatever it last believed,
-   every dip into the 80s and 90s pointed the filter straight at the road: a band of
-   61-140 Hz passes rumble and REJECTS his 148 Hz hum. The detector then reads noise,
-   the noise makes the next estimate worse, and the estimate moves the filter further
-   into the noise. That is a positive feedback loop, and it is what the forest of spikes
-   on his screen actually is - the meter amplifying the thing it was built to remove.
-
-   Three rules come out of it, and the first is the important one:
-
-     1. A golfer hums ONE note per attempt. So LOCK it once and stop chasing. Re-deciding
-        every frame gives the loop somewhere to go; a lock gives it nowhere.
-     2. Only lock when the estimate is actually CONFIDENT - a sustained run of frames
-        that agree with each other - otherwise stay on the safe wide band. An unconfident
-        guess is exactly the one that points at the road.
-     3. NEVER tune the low edge below 105 Hz whatever the estimate says. Hums live at
-        130-160 Hz and road rumble lives underneath; there is no reading of the audio
-        where opening that door is correct.                                             */
-const LOCK_MIN_FRAMES = 25, LOCK_AGREE = 0.70, LOCK_TOL_C = 80, TUNE_FLOOR_HZ = 105;
-function lockNote(hzList){
-  if(!hzList || hzList.length < LOCK_MIN_FRAMES) return 0;
-  const cand = anchorNote(hzList);
-  if(!cand || cand < TUNE_FLOOR_HZ || cand > SR_MAX) return 0;
-  const near = hzList.filter(h=>Math.abs(1200*Math.log2(h/cand)) < LOCK_TOL_C).length;
-  return (near/hzList.length) >= LOCK_AGREE ? cand : 0;
-}
-/* ONCE THE NOTE IS KNOWN, ANYTHING FAR OFF IT IS NOT HIS VOICE. A hum is one note. A
-   frame 400 cents away is not him cracking - a crack returns to the note, and it returns
-   within a few frames. It is the detector finding a "pitch" in a passing car. Marking it
-   unvoiced is honest: we did not hear the hum in that frame. It also stops the line
-   drawing a spike for every truck on the road, which is the thing he can see. */
-const OFF_NOTE_C = 400;
-function onNote(hz, ref){
-  if(!hz || !ref) return hz;
-  return Math.abs(1200*Math.log2(hz/ref)) > OFF_NOTE_C ? 0 : hz;
-}
-function confirmNoteOctave(note){
-  for(let lift=0; lift<2; lift++){
-    const cand = note*2;
-    if(cand > SR_MAX) break;
-    let voiced=0, agree=0, tested=0;
-    frames.forEach(f=>{
-      if(!f.buf) return;
-      tested++;
-      const d = detect(Float32Array.from(f.buf), sampleRate, note*1.6);
-      if(d){ voiced++; if(Math.abs(1200*Math.log2(d.hz/cand))<OCTAVE_OFF_CENTS) agree++; }
-    });
-    if(!tested || voiced/tested < 0.8 || !voiced || agree/voiced < 0.8) break;
-    note = cand;
-  }
-  return note;
-}
-
-// Re-run detection on the SAME audio with the search floor raised above the
-// subharmonic, so the detector is not allowed to report half the note. A frame that
-// comes back on the note was a tracking artifact and gets put back where it belongs.
-// A frame that comes back with nothing, or with some other pitch, is the voice —
-// leave it, so it still reads as the crack it is. Judged per RUN, because a run of
-// octave-off frames is one event and cannot be half artifact and half voice.
-function resolveOctaves(note){
-  const off = frames.map(f => f.hz && Math.abs(1200*Math.log2(f.hz/note))>=OCTAVE_OFF_CENTS);
-  if(!off.some(Boolean)) return;
-  const minReal = Math.max(2, Math.round(JUMP_HOLD_MS/HOP));
-
-  let i=0;
-  while(i<frames.length){
-    if(!off[i]){ i++; continue; }
-    let j=i; while(j<frames.length && off[j]) j++;
-
-    let confirms=0, contradicts=0, snap=[], ok=true;
-    for(let k=i;k<j;k++){
-      const p = Math.round(Math.log2(note/frames[k].hz));
-      const cand = frames[k].hz*Math.pow(2,p);
-      // only a clean power of two is an octave error; anything else is the voice
-      if(p===0 || Math.abs(1200*Math.log2(cand/note))>=OCTAVE_OFF_CENTS){ ok=false; break; }
-      snap.push(cand);
-      const d = frames[k].buf ? detect(Float32Array.from(frames[k].buf), sampleRate, note*0.8) : null;
-      if(d){ if(Math.abs(1200*Math.log2(d.hz/note))<OCTAVE_OFF_CENTS) confirms++; else contradicts++; }
-    }
-    if(ok && !contradicts && ((j-i)<minReal || confirms>=2))
-      for(let k=i;k<j;k++) frames[k].hz = snap[k-i];
-    i=j;
-  }
-}
-
-// A crack is something you can HEAR. Smooth over the hold window first so a single
-// frame that leaps and is back home 40ms later — the detector blinking — doesn't get
-// counted, then count each contiguous displacement once, because one break is one
-// break however many frames it spans.
-function cracks(){
-  const out=[], k=Math.max(1,Math.round(JUMP_HOLD_MS/HOP));
-  const held = frames.map((f,i)=>{
-    const w=frames.slice(Math.max(0,i-k),i+k+1).filter(x=>x.hz).map(x=>x.hz);
-    return w.length ? median(w) : 0; });
-  let inJump=false;
-  for(let i=1;i<frames.length;i++){
-    const a=held[i-1], b=held[i];
-    const jump = a&&b && Math.abs(1200*Math.log2(b/a))>JUMP_CENTS;
-    if(jump && !inJump) out.push(i);
-    inJump = jump;
-    // a dropout: the tone stopped and stayed stopped
-    if(frames[i-1].hz && !frames[i].hz && frames.slice(i,i+3).every(f=>!f.hz)) out.push(i);
-  }
-  return out;
-}
-
-function band(v,best,worst,pts){
-  if(v<=best) return pts;
-  if(v>=worst) return 0;
-  return pts*(1-(v-best)/(worst-best));
-}
-
-// De-hash the pitch track: a 3-frame median.
-//
-// A voice cannot change pitch in 40 milliseconds. Measured across his 14 hums, 55-90%
-// of the frame-to-frame movement in the trace was exactly that: zig-zag between
-// adjacent frames, physically impossible to sing, and therefore the estimator talking
-// about itself. On the flattest hum on record it was 8.4 of the 9.4 cents.
-//
-// It was being drawn as a jagged line AND charged to him as wobble, which is why a hum
-// that looked perfect on a real pitch monitor came back here looking hairy and scoring
-// lower than it deserved. Same defect, both complaints.
-//
-// A 3-frame median spans 120ms: it erases single-frame spikes and leaves anything
-// lasting two frames or more untouched — which is deliberately the same threshold the
-// crack detector uses, so a real break still survives to be counted as one.
-function deHash(){
-  const raw = frames.map(f=>f.hz);
-  for(let i=0;i<frames.length;i++){
-    const w=[raw[i-1],raw[i],raw[i+1]].filter(x=>x>0).sort((a,b)=>a-b);
-    if(w.length) frames[i].hz = w[w.length>>1];
-  }
-}
-
-// WOBBLE and DRIFT, measured over whatever slice of the hum it is handed.
-//
-// Pulled out of score() so the SAME definitions can be applied to the part of a hum
-// that was actually held, rather than to the whole recording. That is not a nicety:
-// measured across a swing break these came back at 296 cents, so the break was
-// wrecking the very numbers meant to describe the part that went well.
-// ── STEADINESS ───────────────────────────────────────────────────────────────
-//
-// REWRITTEN 2026-08-18 after Brixton overruled the old scorer on four swing hums.
-// It graded them 13-38; he said "all those above should be over 75." He was right, and
-// the fix was in his own words about the reference recording he sent:
-//
-//     "a steady hum that should score in the high 90s WITH A STRAIGHT LINE"
-//
-// A straight line that TILTS is still a straight line. The old score charged `drift` =
-// |trend[LAST] - trend[FIRST]|, which compares two endpoints and never looks between
-// them, so a perfectly smooth ramp was punished exactly as hard as a violent shake. On a
-// swing hum the last frame IS impact, so drift was measuring the strike, not the hum.
-//
-// And his second point, which is the whole product:
-//
-//     "the tension point in their swing is where they hold their breath. The hum stops
-//      for a split second and then they almost grunt because they gasp that air out."
-//
-// So a hum fails in exactly two ways, and the score is both at once:
-//
-//     LINE   - while you were humming, how tightly you hugged your own smooth path
-//     ON-AIR - how much of the span you were humming at ALL
-//     SCORE  = % of frames that are BOTH voiced AND on the line
-//
-// Measuring against the SPAN (first voiced frame to last) rather than against voiced
-// frames catches a spike and a dropout with one idea and no extra constant. Validated
-// on his three Nail the Pitch recordings and four graded swing hums:
-//
-//     REF-1 "straight line"      line 99.6  air 100.0  ->  99.6   he said "high 90s"
-//     REF-2 "a bit less steady"  line 88.4  air  91.5  ->  80.9
-//     REF-3 "the hum is lost"    line 86.4  air  76.7  ->  66.2
-//     SWING 1-4                  air 100 throughout    ->  70.5-88.9   he said "over 75"
-//
-// TOL = 25 cents, set by those anchors: tighter drops the swings to 55-77 and breaks
-// "over 75"; looser stops separating REF-1 from REF-2.
-const TOL_CENTS = 25, TREND_MS = 200, HOLD_MIN_MS = 50, GASP_CENTS = 100, GASP_GAP_MS = 250;
-
-// Brixton's rule, 2026-08-18: "if the hum cracks, the score has to be definitely below 75."
-// A CEILING, not a penalty. A hum that cracked cannot read CLEAN or ELITE however good
-// the rest of it was, because the whole game is getting through the swing WITHOUT
-// cracking. Measured against his ten graded clips this crack definition returns 0 for
-// every hum he called good and non-zero for every hum he called broken, so the cap only
-// actually bites on one of them - the rule and the metric already agreed.
-/* ⚠️ 160 ms, RAISED FROM 100 — A BLIP IS NOT A CRACK.
-   His own six-foot recording, which he graded "90+, super steady, NO BREAKS", measures 98%
-   steady and 98% on-air and was scoring 72.9. One 120 ms pitch jump, 500 ms from the end,
-   was capping it: any crack at all puts a hum under 75 by his rule, so a single blip in
-   ten seconds of near-perfect hum cost 25 points. A voice that actually cracks stays
-   cracked longer than three frames. At 160 ms his clip reads 95.3 and NOTHING ELSE in the
-   corpus moves - not one other clip changes by a tenth - so this is not tuning, it is a
-   threshold that was simply too tight to distinguish a wobble from a break. */
-const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 160,
-      CRACK_DROP_MS = 100, CRACK_TAIL_MS = 150;
-
-// ── ISOLATE THE HUM ──────────────────────────────────────────────────────────
-// A recording is not a hum. Hold the phone through a golf swing and you capture the hum
-// plus the ball flight, the reaction, the talking. Scored end to end every second of that
-// aftermath reads as "you lost the hum" — a swing Brixton graded 63 came back 26.5.
-//
-// The hard part: a hum HAS gaps, and those gaps are the most valuable thing in it — they
-// are the breath holds. So a gap must not end the hum. But the end of the hum is also a
-// gap, and length cannot separate them (his reference hums hold 550 ms; the aftermath in
-// the swing clip starts after 160 ms). What separates them, measured across all of his
-// reference recordings:
-//
-//     a BREATH HOLD  resumes ON the note      -> within +/-40c,  62-100% on-note after
-//     the END of the hum resumes elsewhere    -> 440-728c off,    1.5-7% on-note after
-//
-// Bridge a gap when the hum comes back to the same note and stays. End it when it does not.
-const ISO_NEAR_C = 150, ISO_ON_FRAC = 0.40, ISO_MAX_GAP_MS = 1200, ISO_MIN_MS = 700;
-function isolate(fr){
-  const idx=[]; fr.forEach((f,i)=>{ if(f.hz) idx.push(i); });
-  if(idx.length<10) return [0, fr.length];
-  const centre = median(idx.map(i=>fr[i].hz));
-  const off = hz => Math.abs(1200*Math.log2(hz/centre));
-  const look = Math.round(2000/HOP), maxGap = Math.round(ISO_MAX_GAP_MS/HOP);
-  const start = idx[0]; let end = start;
-  for(let k=0;k<idx.length-1;k++){
-    const a=idx[k], b=idx[k+1];
-    if(b-a<=1){ end=b; continue; }
-    const nxt = fr.slice(b, b+look);
-    const on  = nxt.filter(f=>f.hz);
-    /* ⚠️ THE HUM ENDS AT SILENCE, NOT AT AN OFF-NOTE PATCH.
-
-       This used to require the audio after a gap to resume ON HIS NOTE and gave up if it
-       did not - so it ended the hum at the first sustained off-note excursion, which is
-       the event this meter exists to measure. Measured on SWING121: the voiced track runs
-       essentially unbroken across all 6.2 s and isolate kept 0.0-2.7s. The scorer was
-       handed the clean opening and never saw the part that comes apart.
-
-       HOW IT WAS CONFIRMED, because the scores alone were ambiguous. Fixing it moved
-       SWING121 82 -> 73 (right) and SWING63 62 -> 43 (apparently wrong against his
-       recorded grade of "~63"). So he was sent the raw audio and asked to listen to the
-       whole clip, and he re-graded it: "swing63 I'd grade in the 50s BECAUSE I LOST IT AT
-       IMPACT."
-
-       His original 63 had been given while looking at the graph the app drew - a graph
-       that had already thrown away the half where he lost it. The truncation was hiding
-       the very thing he grades on, and it was hiding it from him as well as from the
-       scorer. A gap ends the hum when it is LONG; what note the voice returns on is the
-       measurement, not the boundary.                                                    */
-    const resumes = on.length>=5 && (on.length/Math.max(1,nxt.length)) >= ISO_ON_FRAC;
-    if(b-a<=maxGap && resumes){ end=b; continue; }
-    break;
-  }
-  const tail = idx.filter(i=>i>=end);
-  if(tail.length){ let j=0; while(j<tail.length-1 && tail[j+1]-tail[j]<=1) j++; end=tail[j]; }
-  if((end-start)*HOP < ISO_MIN_MS) return [0, fr.length];
-  return [start, end+1];
-}
-
-function score(rumble, level){
-  const [i0,i1] = isolate(frames);
-  const hum = frames.slice(i0,i1);
-  /* ⚠️ THE SPAN MUST START AT A REAL HUM, NOT AT THE FIRST FRAME THAT READS AS PITCH.
-
-     This used to be findIndex(f=>f.hz) - the very first voiced frame anywhere - and that
-     was survivable only while the detector was deaf. Now that the live audio is filtered
-     and the clarity bar for filtered audio is 0.36, the QUIET LEAD-IN is no longer
-     silent: a tight band-pass around his note turns ordinary room and road noise into
-     the occasional voiced frame. One of those, seconds before he starts, drags the span
-     back to include all the silence in between - and `total` is the share of the SPAN
-     spent on his line, so a hum that fills half the window can score half of what it
-     deserves before the crack multiplier has even been applied.
-
-     Measured on his own board recording: the hum occupied a little over half the plot,
-     the rest was lead-in, and it scored 35 for a hum he called 65-70.
-
-     So an onset is a RUN, not a frame: 200 ms of continuous pitch is a voice starting.
-     A single frame is noise, and noise is what the lead-in is made of. */
-  /* ⚠️ THE SPAN IS THE BODY OF THE HUM, NOT EVERYTHING FROM THE FIRST BLIP TO THE LAST.
-
-     He graded two of his own six-foot recordings by ear - "90+, super steady, NO BREAKS"
-     and "elite, over 90" - and the scorer found three and five cracks in them. Where they
-     sat is the whole story:
-
-         REAL-6FT (no breaks)   0.4s, 0.8s ................... 11.9s     clip is 14.9s
-         FAR-6FT  (no breaks)   0.6s, 0.9s, 1.2s, 1.6s ....... 9.6s      clip is  9.9s
-         REF3     (all breaks)  ..... 3.3 4.3 4.6 7.9 11.3 12.9s
-         SWING63  (lost at ball) .... 4.4 4.5 4.6s
-
-     Every false crack is at the very start or the very end; every real one is in the body.
-     That is him pressing record and walking into position, and walking back afterwards -
-     and in the app it is the tap, the walk to the ball and the set-up. It is not his hum,
-     and it was being scored as the worst part of it.
-
-     So the span now starts where the hum is genuinely UP - sustained pitch at a level
-     comparable to the body of the hum - and ends where it drops away for good. A quiet
-     approach cannot open the span, and a fade-out cannot close it late. */
-  const ONSET = Math.max(2, Math.round(200/HOP));
-  const runStart = (arr, dir) => {
-    const idx = dir>0 ? arr.map((_,i)=>i) : arr.map((_,i)=>arr.length-1-i);
-    let run = 0;
-    for(const i of idx){
-      if(arr[i].hz){ run++; if(run >= ONSET) return dir>0 ? i-run+1 : i+run-1; }
-      else run = 0;
-    }
-    return -1;
-  };
-  const bodyLvl = (()=>{
-    if(!level || !level.length) return null;
-    const v=[]; for(let i=0;i<hum.length;i++){ const q=level[i0+i]; if(q!=null && hum[i].hz) v.push(q); }
-    return v.length>=10 ? median(v)*0.45 : null;
-  })();
-  const upAt = (dir) => {
-    const idx = dir>0 ? hum.map((_,i)=>i) : hum.map((_,i)=>hum.length-1-i);
-    let run=0;
-    for(const i of idx){
-      const loud = bodyLvl==null || (level[i0+i]!=null && level[i0+i] >= bodyLvl);
-      if(hum[i].hz && loud){ run++; if(run>=ONSET) return dir>0 ? i-run+1 : i+run-1; }
-      else run=0;
-    }
-    return -1;
-  };
-  let first = upAt(1), last = upAt(-1);
-  if(first<0 || last<0){ first = runStart(hum, 1); last = runStart(hum, -1); }
-  // if nothing ever sustained, fall back to the old behaviour rather than refuse
-  if(first < 0 || last < 0){
-    first = hum.findIndex(f=>f.hz);
-    last  = hum.length-1-[...hum].reverse().findIndex(f=>f.hz);
-  }
-  if(first < 0 || last-first < 20) return null;
-  const span = hum.slice(first, last+1);              // trim lead-in / tail silence
-  const voiced = span.map(f=>!!f.hz);
-  const vh = span.filter(f=>f.hz).map(f=>f.hz);
-  if(vh.length < 15) return null;
-
-  const note = median(vh);
-  const cents = vh.map(h=>1200*Math.log2(h/note));
-  const k = Math.max(1, Math.round(TREND_MS/HOP/2));
-  const path = cents.map((_,i)=>median(cents.slice(Math.max(0,i-k), i+k+1)));
-  /* ── SUBTRACT OUR OWN MEASUREMENT NOISE ───────────────────────────────────────
-     This is the rule the whole day kept arriving at, finally stated properly: do not
-     charge a golfer for OUR error.
-
-     `dev` is how far each frame sits from the local trend, and it contains two things
-     that are not the same - how much his pitch actually moved, and how badly we measured
-     it. On clean audio the second term is negligible. On a road it is not, and it is why
-     the same hum collapsed: noise inflates dev everywhere, more frames fall outside the
-     25-cent tolerance, and enough of them cross 100 cents to manufacture cracks he never
-     made. Measured: REF2 went 90 with zero cracks to 56 with seven, purely from adding
-     his own road recording underneath his own hum.
-
-     The measurement noise can be estimated, because a human voice cannot move much in
-     40 ms. Frame-to-frame change beyond the physiological limit is not him - it is us.
-     Taking a ROBUST spread of the frame differences (MAD, so a real crack does not
-     inflate it) gives sigma, and subtracting it in quadrature leaves the movement that
-     was actually his:
-
-         dev_true = sqrt( max(0, dev^2 - sigma^2) )
-
-     On a clean hum sigma is a few cents and nothing changes - his graded anchors are
-     the proof. On a noisy one sigma is large and the score stops collapsing. An
-     instrument that knows its own precision reports the signal, not the error bar. */
-  const diffs = [];
-  for(let i=1;i<cents.length;i++) diffs.push(Math.abs(cents[i]-cents[i-1]));
-  const sigma = diffs.length ? Math.min(40, median(diffs)*1.4826/Math.SQRT2) : 0;
-  const dev  = cents.map((c,i)=>Math.sqrt(Math.max(0, (c-path[i])*(c-path[i]) - sigma*sigma)));
-
-  // dev laid back onto the full span, so a dropout and a spike are the same axis
-  const devSpan = new Array(span.length).fill(null);
-  let vi=0; for(let i=0;i<span.length;i++) if(voiced[i]) devSpan[i]=dev[vi++];
-
-  /* ⚠️ EXCLUDING UNMEASURABLE TIME FROM THE DENOMINATOR WAS TRIED HERE AND REVERTED.
-
-     The idea was sound and the measurements were good almost everywhere: dividing only
-     by time we could actually hear took PERFECT2 in heavy noise from 62 to 85, REF2 from
-     56 to 66, SWING63 from 42 to 56. It failed on the case the product exists for.
-
-     A SWING hum stops at the ball. That stop is the measurement - it is the restriction
-     Brixton wants a golfer to see. But a strike is loud, so "the band is still loud, so
-     we must have failed to hear him" is exactly true at impact, and the frame gets
-     excluded instead of counted. SWING121 went from 68 to 89 against his own "60s ish":
-     the rule forgave precisely the event it should have caught. Narrowing the level
-     measurement to his note instead of the whole band did not separate them either.
-
-     So the span stays the span. If a better discriminator between "he stopped" and "we
-     went deaf" turns up, this is where it goes - but it has to survive SWING121. */
-  /* ⚠️ FORGIVING SHORT GAPS IN THE DENOMINATOR: TRIED TWICE, REVERTED TWICE.
-
-     The pull is real. Walking his phone a few feet away drops the share of frames that
-     resolve a pitch from 98% to 64%, and `total` is the share of the SPAN spent on his
-     line - so a third of it is lost before scoring begins, and the same hum reads 96 on
-     the phone and 33 at three feet. He is right that both should be over 90.
-
-     Both attempts to fix it here died on the same clip. Deciding by LEVEL (band still
-     loud = we went deaf) forgave a swing hum stopping at the ball, because a strike is
-     loud: SWING121 68 -> 89 against his "60s ish". Deciding by LENGTH (gaps under 200 ms
-     are ours) forgave it too - his real breaks are made of short gaps: SWING121 -> 88.5,
-     out of band. There is no boundary here that separates "we could not hear him" from
-     "he stopped" without also excusing the restriction the meter exists to find.
-
-     Which means this is not a scoring problem. At three feet the front end resolves 64%
-     of frames, 25% of those are off-note and 10% are a clean octave out. Fix the
-     DETECTION and the denominator stops mattering; patch the denominator and SWING121
-     breaks every time. (YIN was tried for the detection side and did not move the
-     distance numbers either - see the git history for that build.) */
-  const onLine = devSpan.map(d=>d!==null && d<=TOL_CENTS);
-  const total  = onLine.filter(Boolean).length / span.length * 100;
-  const line   = dev.filter(d=>d<=TOL_CENTS).length / dev.length * 100;
-  const onAir  = voiced.filter(Boolean).length / span.length * 100;
-
-  // TENSION EVENTS: breath hold -> gasp. This is the coaching output, not a stat.
-  const minHold = Math.max(1, Math.round(HOLD_MIN_MS/HOP));
-  const gapMax  = Math.round(GASP_GAP_MS/HOP);
-  const holds=[]; for(let i=0;i<span.length;){
-    if(!voiced[i]){ let j=i; while(j<span.length && !voiced[j]) j++;
-      if(j-i>=minHold) holds.push([i,j]); i=j; } else i++; }
-  const gasps=[]; for(let i=0;i<span.length;){
-    if(devSpan[i]!==null && devSpan[i]>GASP_CENTS){ let j=i, mx=0;
-      while(j<span.length && devSpan[j]!==null && devSpan[j]>GASP_CENTS){ mx=Math.max(mx,devSpan[j]); j++; }
-      gasps.push([i,j,mx]); i=j; } else i++; }
-  const tension=[];
-  for(const [h0,h1] of holds) for(const [g0,,mx] of gasps)
-    if(g0>=h1 && g0-h1<=gapMax){ tension.push({at:(h0*HOP)/1000, holdMs:Math.round((h1-h0)*HOP), gasp:Math.round(mx)}); break; }
-
-  // Least-squares slope over the whole path, NOT path[last]-path[0]. The endpoint
-  // difference is precisely what made the old `drift` untrustworthy: it reads two frames
-  // and ignores everything between them, so one noisy end frame invents a tilt that is
-  // not there. (Measured: it claimed -188c on a reference hum that is level to -5c.)
-  const n = path.length, xm = (n-1)/2, ym = path.reduce((a,b)=>a+b,0)/n;
-  let num=0, den=0;
-  for(let i=0;i<n;i++){ num += (i-xm)*(path[i]-ym); den += (i-xm)*(i-xm); }
-  // CRACKS: an audible break. The last 150 ms is exempt - on a swing hum that is impact,
-  // and impact is the strike, not a crack.
-  let noiseGaps = 0;
-  /* ⚠️ 400 ms AT BOTH ENDS, NOT 150. Even after the span is trimmed to the body of the
-     hum, the first and last moments are the voice arriving and leaving - pitch is
-     unsettled there by definition, and at six feet it is unsettled for longer because
-     there is less of it to work with. Measured on the recording he graded "90+, super
-     steady, NO BREAKS": the only two cracks left sat at 0.2s and 11.3s of an 11.8s span,
-     both just inside a 150 ms guard. His real breaks are nowhere near the edges - REF3's
-     run 3.3s to 12.9s of 18s, SWING63's cluster at 4.4-4.6s - so widening the guard
-     cannot hide the events that matter. */
-  const EDGE_MS = 400;
-  const guard = span.length - Math.round(EDGE_MS/HOP);
-  /* A HEAD GUARD, symmetric with the tail one. The tail was exempt because on a swing
-     hum the last 150 ms is impact, and impact is the strike rather than a crack. The
-     same argument applies at the front and was simply never made: the first 150 ms is
-     the voice ARRIVING - pitch is unsettled there by definition, and the filter is still
-     ringing up - so a "crack" in it is the recording starting, not the golfer cracking. */
-  const headGuard = Math.round(EDGE_MS/HOP);
-  const cracks=[];
-  for(let i=0;i<span.length;){
-    if(devSpan[i]!==null && devSpan[i]>CRACK_JUMP_C){
-      let j=i, mx=0;
-      while(j<span.length && devSpan[j]!==null && devSpan[j]>CRACK_JUMP_C){ mx=Math.max(mx,devSpan[j]); j++; }
-      /* ⚠️ CLARITY WAS TRIED HERE AS A "was this really him?" TEST FOR JUMPS, THE WAY
-         BAND ENERGY WORKS FOR DROPOUTS, AND IT WAS REVERTED. It does not separate the
-         two cases, because clarity falls during a REAL crack as well - the voice is
-         disintegrating, which is exactly what the detector reports as low confidence.
-         Measured: it deleted real cracks from his swing hums and took SWING121 from 68
-         to 82 against his own "60s ish". A discriminator that cannot tell the two apart
-         just deletes evidence.
-         Band energy works for dropouts because it answers a different question - is the
-         hum still THERE - and there is no equivalent for a jump. Left as-is on purpose. */
-      if((j-i)*HOP>=CRACK_JUMP_MS && i<guard && i>=headGuard)
-        cracks.push({kind:'jump', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:Math.round(mx)});
-      i=j;
-    } else if(!voiced[i]){
-      let j=i; while(j<span.length && !voiced[j]) j++;
-      /* ⚠️ "THE VOICE BROKE" vs "WE LOST THE SIGNAL" - these are not the same event and
-         charging for both is what noise does to a score.
-
-         Measured with the noise suite, mixing his own road recording into his own graded
-         hums: REF2 went from 90 with ZERO cracks to 56 with SEVEN the moment a quiet road
-         was added. He had not hummed any differently. Every one of those cracks was a
-         stretch where the detector could no longer resolve his hum through the noise.
-
-         There is a physical difference and it is easy to read. When a voice genuinely
-         stops, the energy IN THE HUM BAND goes with it. When noise merely swamps the
-         detector, the band stays loud - the hum is still there, we just cannot resolve
-         a period out of it. So a dropout only counts as a crack if the band actually
-         went quiet. If it stayed loud, we failed to hear him; that is our problem, not
-         his, and it is reported as noise rather than charged to his score. */
-      const gapCounts = (()=>{
-        if(!level || !level.length) return true;              // no level data - old behaviour
-        const base = i0 + first;
-        const voicedLv = [], gapLv = [];
-        for(let k=0;k<span.length;k++){ const v = level[base+k];
-          if(v==null) continue; (voiced[k] ? voicedLv : gapLv).push(v); }
-        if(voicedLv.length < 5) return true;
-        const ref = median(voicedLv);
-        let sum=0, n=0;
-        for(let k=i;k<j;k++){ const v = level[base+k]; if(v!=null){ sum+=v; n++; } }
-        if(!n) return true;
-        return (sum/n) < ref*0.5;                             // band went quiet => a real break
-      })();
-      if((j-i)*HOP>=CRACK_DROP_MS && i>=headGuard && i<guard){
-        if(gapCounts) cracks.push({kind:'drop', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:0});
-        else noiseGaps++;
-      }
-      i=j;
-    } else i++;
-  }
-  /* ── THE WIND FILTER ──────────────────────────────────────────────────────────
-     Brixton: "build in your wind filter."
-
-     A gust does not make a golfer's hum crack - it makes the DETECTOR crack. The gust
-     lands, the fundamental is masked for a few frames, the track drops out, and the
-     scorer books it as a break in the voice. Measured on the synthetic wind suite that
-     is worth up to 9 points on a swing hum, and it is invisible: he would never know a
-     number was wrong, which makes it worse than a refusal he can argue with.
-
-     Refusing the whole recording was the old answer and it is the wrong one - his rule
-     is ALWAYS SCORE IT, and a 25 mph gale still scores a clean hum 100. So attribute
-     instead of refuse: a crack that lands ON a rumble spike is not his, so it does not
-     count against him and it does not trigger the cap. It is still reported, as wind.
-
-     The threshold is the 90th PERCENTILE of rumble, not the mean, because wind is peaky
-     by nature and the mean is dominated by the calm between gusts - clean audio tops out
-     around 0.32 and anything genuinely windy is 0.46+. */
-  let windCracks = 0;
-  if(rumble && rumble.length){
-    const r = [...rumble].filter(x=>x!=null).sort((a,b)=>a-b);
-    const p90 = r.length ? r[Math.min(r.length-1, Math.round(0.90*(r.length-1)))] : 0;
-    if(p90 > 0.46){
-      const base = i0 + first;                       // span index -> frames index
-      const gusty = i => { const v = rumble[base + i]; return v != null && v >= p90; };
-      const kept = cracks.filter(c=>{
-        const a = Math.round(c.at*1000/HOP), b = a + Math.round(c.ms/HOP);
-        for(let i=a;i<=b;i++) if(gusty(i)) return false;   // a gust sat on it - not his
-        return true;
-      });
-      windCracks = cracks.length - kept.length;
-      cracks.length = 0; kept.forEach(c=>cracks.push(c));
-    }
-  }
-
-  /* ── A BREAK IN LOUDNESS IS A BREAK ───────────────────────────────────────────
-     Everything above asks whether he HELD THE NOTE. Nothing asked whether the hum was
-     still THERE, and those are not the same question.
-
-     REF3 is the proof. He graded it "the hum is lost ... all the breaks, I'd put it 50s,
-     60 ish". The scorer said 85 with ZERO cracks, because his pitch never wandered - it
-     drops out three times mid-clip while staying exactly on note, and a dropout is only
-     seen when the PITCH disappears. Measured against its own peak, 17% of REF3 sits under
-     a quarter of its own loudness, against 5-6% for the two hums he graded in the 90s.
-
-     So a sustained collapse in level, relative to the body of his own hum, is a break -
-     and it is charged as one whether or not the pitch survived it. This is also the same
-     event as losing it at the ball, which is the thing the meter is FOR.               */
-  if(level && level.length){
-    const base = i0 + first;
-    const lv = []; for(let i=0;i<span.length;i++){ const v=level[base+i]; if(v!=null && voiced[i]) lv.push(v); }
-    if(lv.length >= 10){
-      const ref = median(lv), floor = ref*0.30, need = Math.round(150/HOP);
-      for(let i=0;i<span.length;){
-        const v = level[base+i];
-        if(v == null || v >= floor){ i++; continue; }
-        let j=i; while(j<span.length && level[base+j]!=null && level[base+j]<floor) j++;
-        /* ⚠️ A BREAK HAS HUM ON BOTH SIDES OF IT. Every hum tapers at the end, and the
-           first version of this charged that taper as a break - his PERFECT2, which he
-           graded ~100, dropped to 74 for the way it finished. A fade is only a break if
-           he PICKED IT BACK UP, which is exactly how he describes the event: "you can
-           hear me hum, then I hit the ball (lose the hum), then hum picks back". So
-           require the hum to come back loud enough, after the quiet patch, to prove it
-           was a break in the middle and not the ending. */
-        const after = level.slice(base+j, base+j+need*2).filter(v=>v!=null && v>=ref*0.6);
-        const cameBack = after.length >= Math.min(need, 3);
-        if(cameBack && (j-i) >= need && i>=headGuard && i<guard &&
-           !cracks.some(c=>{ const a2=Math.round(c.at*1000/HOP); return a2<j && a2+Math.round(c.ms/HOP)>i; }))
-          cracks.push({kind:'fade', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:0});
-        i=j;
-      }
-      cracks.sort((a,b)=>a.at-b.at);
-    }
-  }
-
-  // THE CRACK RULE, and the fix to it.
-  // Brixton: "if the hum cracks, the score has to be definitely below 75."
-  // A flat ceiling did that — and piled every cracked hum onto exactly 74.9, so a badly
-  // lost hum and a mildly cracked one read the same number. Useless to a golfer trying to
-  // improve. So the ceiling COMPRESSES instead of clipping: a cracked hum is scaled into
-  // 0..74.9 by how good it otherwise was. Ordering is preserved, the rule is honoured,
-  // and the range below 75 is actually used.
-  /* ── AND THE FIX TO THE FIX (2026-08-19). ────────────────────────────────────
-     `total * 0.749` is a FLAT 25% HAIRCUT, and a flat haircut turns the crack rule into
-     a cliff. Measured on four of his hums in a row: a clean one scored 89, and one that
-     was identical apart from a SINGLE 100 ms dropout scored 63. One dropout, 26 points.
-     He felt it immediately - "the 63s maybe should have been like 68s" - and he is
-     right, because nothing about those two hums is 26 points apart.
-
-     The rule stays: he locked "if the hum cracks, the score has to be definitely below
-     75", and 74.9 is still the ceiling. What changes is that the drop below it is now
-     proportional to the DAMAGE - how much of the hum the cracks actually destroyed -
-     instead of being the same 25% whether you lost 100 ms or two seconds. One short
-     crack lands just under the ceiling; a hum that keeps falling apart still goes deep.
-
-     This is the same mistake as the original flat ceiling, one level down. That one
-     piled every cracked hum onto exactly 74.9; this one piled them all onto 0.749x. */
-  const capped = cracks.length > 0 && total > CRACK_CAP;
-  /* TWO TERMS, AND THE SECOND ONE IS CRACK COUNT - which is what HIS OWN GRADES separate
-     on, once you lay them out. Scaling by total crack MILLISECONDS was tried first and
-     collapsed three anchors onto exactly 48.7, which is the original flat-ceiling bug
-     wearing a different number. The measurement that killed it:
-
-       REF3    11 cracks, 148 ms lost per second   he said "the hum is lost"
-       SWING63  5 cracks, 191 ms lost per second   he said "~63"
-
-     Nearly the same damage, and he graded them fifteen points apart - so damage alone
-     cannot be the answer, and neither can `total`: REF3's pitch is STEADIER than
-     SWING63's between the breaks. What actually separates them is how many times the
-     hum broke. Five breaks is a swing hum, which is what a swing hum does. Eleven is a
-     hum that keeps falling apart, and that is what he means by lost.
-
-     So: a gentle curve on total keeps a nearly-clean hum just under the 74.9 ceiling
-     (one short crack now reads 68 instead of 63 - his correction), and a count term
-     takes a hum that keeps breaking down into the 40s. The first crack is free of the
-     count term on purpose: one break should cost you the ceiling, not the floor. */
-  const shape   = Math.pow(Math.max(0,total)/100, 0.55);
-  const repeats = 1 - Math.min(0.30, Math.max(0, cracks.length-1)*0.03);
-  const finalTotal = cracks.length ? Math.min(total, CRACK_CAP*shape*repeats) : total;
-
-  const tilt = den ? (num/den)*(n-1) : 0;
-  // (f.clarity||0): deHash can turn a previously-unvoiced frame voiced, and those frames
-  // were pushed without a clarity value. One undefined turns the whole average into NaN,
-  // which is what put "NaN" on screen where a percentage should be.
-  const clar = span.filter(f=>f.hz).reduce((s,f)=>s+(f.clarity||0),0)/Math.max(vh.length,1);
-  return { total: Math.round(finalTotal*10)/10, line, onAir, tension, tilt, note, cracks, capped, windCracks, noiseGaps,
-           humStart: i0+first, humWindow: [i0*HOP/1000, i1*HOP/1000],
-           jitter: median(dev)*1.4826, sigma, held:(vh.length*HOP)/1000,
-           span:(span.length*HOP)/1000, purity: clar, rough: clar < CLARITY_GATE };
-}
-
-// "Better than X% of hums measured" — true because it is read off the measured
-// population, not asserted. It is also the line that makes the score sayable out loud,
-// which is the whole reason the number is on screen at all.
-function beats(total){
-  const ps = Object.keys(CAL.percentiles).map(Number).sort((a,b)=>a-b);
-  let below = 0;
-  ps.forEach(p=>{ if(total >= CAL.percentiles[String(p)]) below = p; });
-  if(total < CAL.percentiles[String(ps[0])]) return null;
-  return below;
-}
-
-// There is no CRACKED band any more, on purpose. A break is now a NUMBER — it moves
-// the score in proportion to how far you got — so the band it lands in is the honest
-// answer, and the sentence underneath says where it went instead of just "broken".
-/* ── WHAT IT SAYS BACK ────────────────────────────────────────────────────────
-   One sentence, and it has to do three things: name what happened, say where, and
-   give them the next rep. Rewritten 2026-08-18 after Brixton read the old copy:
-   "just make the wording a little bit better - your hum cracked ONE TIME at THIS
-   MARK, your goal is to keep a steady hum throughout the entire swing."
-
-   Priority order matters. A hum that stopped at the ball is a more useful thing to
-   be told than a band, and a crack is more useful than a wobble - so the specific
-   failure always wins over the generic grade.                                     */
-/* One writer for the sentence, so it can be blank and simply disappear rather than
-   leaving an orphan gap where a paragraph used to be. */
-function setSay(main, tail){
-  const el=document.getElementById('sy');
-  const t=[main, tail].filter(Boolean).join('  ·  ');
-  el.textContent=t; el.style.display = t ? '' : 'none';
-}
-
-function verdict(s){
-  const col = s.total>=CAL.bands.ELITE ? ['ELITE','var(--go)']
-            : s.total>=CAL.bands.CLEAN ? ['CLEAN','var(--ok)']
-            : s.total>=CAL.bands.SHAKY ? ['SHAKY','var(--warn)']
-            : ['NEEDS WORK','var(--bad)'];
-
-  const GOAL = 'Your goal is one steady hum through the whole swing.';
-  const where = c => {
-    if(!s.impact) return 'at ' + c.at.toFixed(1) + 's';
-    const d = c.at - s.impact.frame*HOP/1000;
-    return Math.abs(d) < 0.08 ? 'right at the ball'
-         : Math.abs(d).toFixed(1) + 's ' + (d<0 ? 'before' : 'after') + ' you hit it';
-  };
-
-  let say;
-
-  // 1. the hum stopped at the strike — the most diagnostic thing that can happen
-  if(s.through && s.through.restrictedAt){
-    say = 'You lost the hum right at the ball. That is where you tightened up.';
-  }
-  // 2. it cracked
-  else if(s.cracks.length === 1){
-    say = 'Cracked once, ' + where(s.cracks[0]) + '. Anything that cracks caps at 75.';
-  }
-  else if(s.cracks.length > 1){
-    say = 'Cracked ' + s.cracks.length + ' times, the first ' + where(s.cracks[0]) + '. Anything that cracks caps at 75.';
-  }
-  // 3. it never cracked, so grade the line itself
-  else if(s.total >= CAL.bands.ELITE){
-    say = (s.through && s.through.survived)
-      ? 'One line the whole way, and it survived the ball.'
-      : 'One line the whole way. Nothing broke.';
-  }
-  else if(s.total >= CAL.bands.CLEAN){
-    say = 'Held one note the whole way. The wobble is what is left.';
-  }
-  else {
-    // SHAKY and NEEDS WORK say NOTHING, on purpose.
-    // A specific failure is worth a sentence - "you lost it right at the ball" tells a
-    // golfer what to do next. A generic one is not: "pick one note and hold it" is just
-    // the score restated as advice, and it reads as nagging the people who did worst.
-    // The number and the line already said it. Silence is the stronger note here.
-    say = '';
-  }
-
-  // Reported, never scored: a straight line that tilts is still a straight line.
-  if(!s.cracks.length && Math.abs(s.tilt) > 120)
-    say += ' The note also ' + (s.tilt>0?'climbed':'dropped') + ' as you went.';
-
-  return [col[0], col[1], say];
-}
-
-const HOP = 40;                       // ms between pitch frames
-let timer;
-
-// ── the three things that actually stop a stranger, in the order they happen ──
-//
-// This is the whole ballgame for a link posted to Instagram. A meter that works
-// perfectly and says "Microphone blocked" to a first-time visitor has failed, because
-// nobody debugs a stranger's web page — they close it. Each of these gets told exactly
-// what went wrong and exactly what to do, and none of them says "blocked".
-
-// 1. IN-APP BROWSERS. A link tapped inside Instagram opens in Instagram's own embedded
-//    webview, not Safari or Chrome, and on iOS that webview has historically refused
-//    microphone access outright. This is THE failure mode for a bio link, and it is
-//    invisible from a desktop test. Detect it and send them out to a real browser.
-function inAppBrowser(){
-  const ua = navigator.userAgent || '';
-  return /Instagram|FBAN|FBAV|FB_IAB|Line\/|Twitter|TikTok|Snapchat|LinkedInApp/i.test(ua);
-}
-
-// 2. NOT HTTPS. getUserMedia is refused outright on a plain http:// origin — the only
-//    exception is localhost. Any real link has to be https, which is why this is
-//    hosted rather than emailed around as a file.
-function insecure(){
-  return !window.isSecureContext &&
-         !['localhost','127.0.0.1'].includes(location.hostname);
-}
-
-// NOTE ON ORDER: we do NOT refuse in-app browsers up front. Whether Instagram's webview
-// can reach a microphone varies by app version and OS and changes without announcement,
-// so a preemptive block would turn people away on the assumption it fails — and be
-// wrong every time it doesn't. Ask the microphone first. Only if it actually fails does
-// being in an in-app browser become the explanation. Evidence, then diagnosis.
-function blocker(){
-  if(insecure()) return ['Insecure connection',
-    'This page needs to be on https:// to use the microphone.'];
-  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
-    return ['Browser too old', 'Try Safari or Chrome.'];
-  return null;
-}
-
-// The escape hatch, shown only once the mic has really refused inside an in-app
-// browser. A visitor cannot "open in Safari" from a page — only the app's own menu can
-// — so the most useful thing the page can do is hand them the address to paste.
-function showEscapeHatch(){
-  const el = document.getElementById('escape');
-  document.getElementById('url').textContent = location.href.replace(/^https?:\/\//,'');
-  el.classList.add('on');
-  document.getElementById('copy').onclick = async () => {
-    try{ await navigator.clipboard.writeText(location.href);
-      document.getElementById('copy').textContent = 'Copied — now paste it in Safari';
-    }catch(e){ document.getElementById('copy').textContent = 'Press and hold the address above to copy'; }
-  };
-}
+/* ── AUDIO ────────────────────────────────────────────────────────────────────
+   Same pitch pipeline as the live meter (hum-core.js), plus two things the simple
+   meter does not do: a wind measurement and an impact detector.                  */
+const H = window.HUM, H_ = window.HUM;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let lastPCM=null, lastSR=44100;
+let ac, stream, an, anF, hp1, hp2, lp1, timer, running=false, hiBand=[], loBand=[], t0=0, heard=false, pcmLog=[], refNote=0, tunedTo=0, lvlLog=[], loudRef=0;
+
+function fit(){ const r=cv.getBoundingClientRect(), d=devicePixelRatio||1;
+  cv.width=r.width*d; cv.height=r.height*d; ctx.setTransform(d,0,0,d,0,0); }
+addEventListener('resize', ()=>{ fit(); draw(); });
 
 async function start(){
-  if(running) return;
-  const b = blocker();
-  if(b){ document.getElementById('hint').innerHTML =
-    '<b style="color:var(--warn)">'+b[0]+'.</b> '+b[1]; return; }
-
-  // THE AUDIO CONTEXT MUST BE BUILT AND RESUMED *HERE* — synchronously, in the tap.
-  //
-  // iOS starts every AudioContext suspended and will only resume one inside the user
-  // gesture that created it. `await getUserMedia(...)` ends that gesture, so a context
-  // constructed after it stays suspended forever: the mic light comes on, the page
-  // looks alive, and every sample it hands you is a zero. That is precisely the "it
-  // doesn't pick up the hum" report from an iPhone, and it is invisible on a Mac
-  // because desktop browsers resume without being asked.
+  if(running) return stop();
   try{
-    ac = new (window.AudioContext||window.webkitAudioContext)();
-    if(ac.state === 'suspended') await ac.resume();
-  }catch(e){
-    document.getElementById('hint').innerHTML =
-      '<b style="color:var(--warn)">Audio didn’t start.</b> Reload and try again.';
-    return;
-  }
-
-  try{
-    // autoGainControl LEFT ON. Turning it off was borrowed from the desktop scorer,
-    // where level matters. Here it does not — the score is pitch only — and on a phone
-    // held at arm's length a hum without AGC comes in so quiet that the silence gate
-    // throws every frame away. Loud and pitch-accurate beats faint and pristine.
     stream = await navigator.mediaDevices.getUserMedia({audio:{
-      echoCancellation:false, noiseSuppression:false, autoGainControl:true}});
+      echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
   }catch(e){
-    if(inAppBrowser()){ showEscapeHatch();
-      document.getElementById('hint').innerHTML =
-        '<b style="color:var(--warn)">This app’s built-in browser won’t share the mic.</b>';
-      return; }
-    // 3. DENIED, OR THE OS SAT ON IT. A browser can be allowed while the operating
-    //    system still refuses — on a Mac, Chrome needs microphone permission in
-    //    System Settings before the page ever gets asked. Same error, different fix,
-    //    so name both.
-    const n = e && e.name;
-    const msg =
-      n === 'NotAllowedError' ? 'Mic permission was denied. Tap the 🔒 in the address ' +
-        'bar → allow Microphone, then reload. On a Mac also check System Settings → ' +
-        'Privacy & Security → Microphone and switch on your browser.'
-    : n === 'NotFoundError'  ? 'No microphone found on this device.'
-    : n === 'NotReadableError' ? 'Something else is using the mic. Close other apps and retry.'
-    : 'Could not start the mic (' + (n || 'unknown') + '). Try reloading.';
-    document.getElementById('hint').innerHTML =
-      '<b style="color:var(--warn)">Mic didn’t start.</b> ' + msg;
-    return;
+    document.getElementById('live').textContent =
+      'I need the microphone. Allow it in your browser settings, then tap again.'; return;
   }
-  // WIND FILTER — the difference between working outdoors and hearing nothing.
-  //
-  // His range recording returned ZERO hums. An 85 Hz high-pass in front of the tracker
-  // recovered three instantly. Wind against a phone lying in the grass is almost all
-  // rumble below the lowest note anyone hums, and to an autocorrelator that rumble is
-  // a big, slow, extremely periodic signal — exactly what it is built to lock onto. So
-  // it locks onto the wind and reports no voice.
-  //
-  // Costs nothing indoors: a hum's fundamental sits at 100-250 Hz, well clear of the
-  // corner, and a voice this removes the bottom octave from is still perfectly periodic
-  // in its harmonics, which is what the period estimate is read from. The low-pass
-  // trims hiss and consonant spray above where a hum has any energy left.
-  //
-  // The level bar reads from after the filter too, which is the honest place for it:
-  // wind was pegging the meter on a page that could not hear the hum.
-  /* ⚠️ NARROWED 2026-08-19, and it is the difference between hearing a hum in a car and
-     refusing one. This chain used to be a single 85 Hz high-pass into a 1200 Hz
-     low-pass, which is barely a filter at all: one pole-pair is 12 dB/octave, so at
-     40 Hz - where a car actually lives - it is only about 12 dB down, and everything
-     from 300 to 1200 Hz sails straight through. Measured on his own car recording, 62%
-     of the energy sits below 90 Hz and the raw detector found pitch in 11% of frames.
-     Three poles into a 300 Hz low-pass takes that to 63%, and the live retune below
-     takes it to 77%. (The BOARD had no filter at all, which is why it refused him four
-     times in a row while he hummed at the top of his lungs.) */
+  ac = new (window.AudioContext||window.webkitAudioContext)();
   const src = ac.createMediaStreamSource(stream);
-  hp1 = ac.createBiquadFilter(); hp1.type='highpass'; hp1.frequency.value = 90;  hp1.Q.value=0.707;
-  hp2 = ac.createBiquadFilter(); hp2.type='highpass'; hp2.frequency.value = 90;  hp2.Q.value=0.707;
-  lp1 = ac.createBiquadFilter(); lp1.type='lowpass';  lp1.frequency.value = 300; lp1.Q.value=0.707;
-  const an = ac.createAnalyser();
-  an.fftSize = 2048; src.connect(hp1); hp1.connect(hp2); hp2.connect(lp1); lp1.connect(an);
+  an = ac.createAnalyser(); an.fftSize = 2048; src.connect(an);
+
+  /* ── FILTER THE LIVE AUDIO. THIS IS THE ONE THAT MATTERED. ──────────────────
+     Brixton, humming loudly in the back of a car, refused four times: "you're not
+     even catching the hums, you can hear me humming loud in this. I'm doing the same
+     thing on Nail the Pitch and it picks it up perfectly."
+
+     He was right, and the two-pass filter built this morning did not help him, because
+     of WHERE it ran. It ran once, at the end, on a reconstruction. The LIVE detector -
+     the one that decides whether a frame has pitch, which is what arms the stop, ends
+     the recording, draws the line, and answers "did it ever hold a note?" - was still
+     reading RAW audio. In that car 62% of the energy sits below 90 Hz. Measured on his
+     own recording:
+
+         RAW (what the live detector used)   11% of frames voiced, longest run 240 ms
+         wide band-pass 90-300 Hz            27%                            160 ms
+         tight band around his note          45%                            280 ms
+
+     The gate needs 400 ms. It could not be reached from raw audio, so the refusal was
+     structural: he could not have passed no matter how well he hummed.
+
+     Nail the Pitch "works every time" because it filters BEFORE it looks, continuously.
+     So do this now. These are BiquadFilterNodes in the audio graph - the browser runs
+     them in native code for free, every sample, with no 40 ms budget to blow. The raw
+     analyser stays for the rumble and impact bands, which need the whole spectrum. */
+  hp1 = ac.createBiquadFilter(); hp1.type='highpass'; hp1.frequency.value=90;  hp1.Q.value=0.707;
+  hp2 = ac.createBiquadFilter(); hp2.type='highpass'; hp2.frequency.value=90;  hp2.Q.value=0.707;
+  lp1 = ac.createBiquadFilter(); lp1.type='lowpass';  lp1.frequency.value=300; lp1.Q.value=0.707;
+  src.connect(hp1); hp1.connect(hp2); hp2.connect(lp1);
+  anF = ac.createAnalyser(); anF.fftSize = 2048; lp1.connect(anF);
+
   const buf = new Float32Array(an.fftSize);
+  const bufF = new Float32Array(anF.fftSize);
+  const spec = new Uint8Array(an.frequencyBinCount);
 
-  frames=[]; running=true; heard=false; quietRun=0; rumbleTrack=[]; hiTrack=[]; pcmLog=[]; refNote=0; tunedTo=0; lvlLog=[]; loudRef=0; t0=performance.now();
-  document.getElementById('res').classList.remove('on');
-  document.getElementById('go').classList.add('rec');
-  document.getElementById('go').textContent = 'Listening… hum, then swing';
-  document.getElementById('state').textContent = 'listening';
+  H.setFrames([]); hiBand=[]; loBand=[]; pcmLog=[]; refNote=0; tunedTo=0; lvlLog=[]; loudRef=0; running=true; heard=false; t0=Date.now();
+  const b=document.getElementById('go'); b.classList.add('rec');
+  b.textContent='Listening — hum, swing, then stop';
+  document.getElementById('res').style.display='none';
 
-  sampleRate = ac.sampleRate;
   timer = setInterval(()=>{
-    an.getFloatTimeDomainData(buf);
-    const raw = Float32Array.from(buf);
-    const d = detect(Float32Array.from(raw), ac.sampleRate, SR_MIN, CLARITY_FILTERED);
-    // keep the audio, not just the verdict on it — the octave resolver has to be able
-    // to re-ask the question, and a number can't be re-measured
-    frames.push(d ? {hz:d.hz, clarity:d.clarity, rms:d.rms, buf:raw} : {hz:0, buf:raw});
-    // Keep the raw audio so the whole recording can be re-read once, properly filtered.
-    // Live detection has to answer instantly; the second look does not.
-    { const hop = Math.round(ac.sampleRate*HOP/1000);
-      const tail = raw.subarray(Math.max(0, raw.length-hop));
+    an.getFloatTimeDomainData(buf);          // raw - for rumble, impact, and pcmLog
+    an.getByteFrequencyData(spec);
+    anF.getFloatTimeDomainData(bufF);        // filtered - for PITCH. see the note above.
+    const d = H.detect(bufF, ac.sampleRate, H.SR_MIN, H.CLARITY_FILTERED);
+
+    /* THE LEVEL THAT DECIDES WHEN HE HAS STOPPED, measured on the FILTERED signal and
+       not the raw one. That is the whole trick: in a car the raw level barely moves
+       when he stops humming, because the road is still there and the road is most of
+       the energy. Band-limited to his note, his voice is nearly all of what is left, so
+       the level drops off a cliff the moment he stops - which is the event we need.
+       The floor is relative to how loud HE was, so it works in a car and in a quiet
+       room without a number tuned to either. */
+    { let e=0; for(let i=0;i<bufF.length;i++) e+=bufF[i]*bufF[i];
+      const rmsF = Math.sqrt(e/bufF.length);
+      lvlLog.push(rmsF);
+      if(d) loudRef = Math.max(loudRef*0.997, rmsF);   // decaying peak of the actual hum
+    }
+    H.getFrames().push({hz: d ? d.hz : 0, clarity: d ? d.clarity : 0});
+    // keep the raw audio for the second, properly-filtered look after recording ends
+    { const hop = Math.round(ac.sampleRate*H.HOP/1000);
+      const tail = buf.subarray(Math.max(0, buf.length-hop));
       for(let i=0;i<tail.length;i++) pcmLog.push(tail[i]); }
-    document.getElementById('note').textContent = d ? d.hz.toFixed(1)+' Hz' : '—';
 
-    // level, straight off the raw buffer — independent of whether pitch detection works
-    let lv=0; for(let i=0;i<raw.length;i++) lv+=raw[i]*raw[i];
-    lv = Math.sqrt(lv/raw.length);
+    // Band energies. LOW is where wind lives; HIGH is where a strike lives and a
+    // hum does not. Bin width = sampleRate / fftSize.
+    const bw = ac.sampleRate/an.fftSize;
+    let lo=0, mid=0, hi=0;
+    for(let i=1;i<spec.length;i++){
+      const f=i*bw, v=spec[i]/255;
+      if(f<100) lo+=v; else if(f<1200) mid+=v; else if(f<8000) hi+=v;
+    }
+    loBand.push(lo/(lo+mid+1e-9)); hiBand.push(hi);
 
-    // RUMBLE. Wind is overwhelmingly low-frequency energy; a hum is not.
-    // ⚠️ The cutoff is 55 Hz, NOT 100 Hz, and that matters: his hums sit at 108-140 Hz,
-    // so a 100 Hz low-pass captures a big slice of the FUNDAMENTAL and reads 0.41-0.49
-    // on perfectly clean audio — it was measuring the voice. Measured across the
-    // synthetic wind suite, 55 Hz puts a clean hum near 0.1 and a 15 mph gust past 0.6,
-    // which is the headroom a threshold needs to mean anything.
-    { const dt=1/ac.sampleRate, rc=1/(2*Math.PI*55), a=dt/(rc+dt);
-      let y=0, lo=0;
-      for(let i=0;i<raw.length;i++){ y += a*(raw[i]-y); lo += y*y; }
-      lo = Math.sqrt(lo/raw.length);
-      rumbleTrack.push(lv>1e-6 ? lo/lv : 0); }
-
-    // HIGH BAND, for finding impact. A golf strike is a sharp BROADBAND transient -
-    // energy right across the spectrum in one frame. A hum is the opposite: narrow,
-    // harmonic, and it ramps. So everything above ~1200 Hz is almost pure "strike",
-    // and a one-pole high-pass gets it without an FFT or a second analyser node.
-    { const dt=1/ac.sampleRate, rc=1/(2*Math.PI*1200), a=dt/(rc+dt);
-      let y=0, hiE=0;
-      for(let i=0;i<raw.length;i++){ y += a*(raw[i]-y); const h=raw[i]-y; hiE += h*h; }
-      hiTrack.push(Math.sqrt(hiE/raw.length)); }
-    /* LIVE OCTAVE LOCK - see foldOctave(). Re-anchored every frame from the last two
-       seconds of pitch, so it follows whatever note this golfer hums, and re-applied
-       across the whole track so the picture is consistent rather than fixing itself
-       halfway through. Display only: `hz` is untouched and the scorer still does its
-       own, evidence-checked octave resolution at the end. */
-    /* Display only - see the retune note below for why `hz` is never touched live. */
-    { const recent = frames.slice(-50).filter(f=>f.hz).map(f=>f.hz);
-      if(recent.length >= 10){ const r = anchorNote(recent); if(r) refNote = r; }
-      if(refNote) for(const fr of frames){        // display only - see the board for why
-        const h = foldOctave(fr.hz, refNote);
+    /* LIVE OCTAVE LOCK - see foldOctave() in hum-core.js. Autocorrelation has no memory
+       of the note you are already on, so a breathy frame halves and the line plunges a
+       full octave. Brixton, holding one steady note on this page: "these lines are going
+       a little up and down too much for a pretty steady hum." Re-anchored every frame
+       from the last two seconds and re-applied across the whole track, so the picture is
+       consistent instead of correcting itself halfway through. */
+    /* LOCK THE NOTE ONCE, THEN STOP CHASING IT - see lockNote() in hum-core.js. Chasing
+       it every frame is what let the filter walk into the road outdoors and start
+       amplifying the noise it exists to remove. */
+    /* Display only. `hz` is never touched live - there is no note estimate live that is
+       trustworthy enough to throw a frame away on (see the retune note below). */
+    { const recent = H.getFrames().slice(-50).filter(f=>f.hz).map(f=>f.hz);
+      if(recent.length >= 10){ const r = H.anchorNote(recent); if(r) refNote = r; }
+      /* Calm the LIVE line. At arm's length the hum band is full of other things and the
+         detector draws a spike for each one - "your lines got jagged, you picked up on a
+         lot of other background noise." A hum is one note, so anything more than ~500
+         cents from it is not what he is doing. Generous on purpose (the final gate is
+         400c on a note we can trust) and DISPLAY ONLY - `hz` is untouched, so the score
+         is unaffected and nothing here can hide a real crack. */
+      if(refNote) for(const fr of H.getFrames()){
+        const h = H.foldOctave(fr.hz, refNote);
         fr.drawHz = (h && Math.abs(1200*Math.log2(h/refNote)) > 500) ? 0 : h;
       } }
 
-    /* THE SECOND PASS, LIVE. The fixed 90-300 Hz band is all that can be done before the
-       note is known; the moment it IS known, tighten around it. That is the pass that
-       does the real work - on his car recording, 63% of frames voiced becomes 77%. */
+    /* THE SECOND PASS, LIVE. Pass 1 above is the fixed 90-300 Hz band, which is all we
+       can do before the note is known. The moment it IS known, tighten the filter
+       around it - that is the pass that does the real work, and on his car recording it
+       is the difference between 27% of frames voiced and 45%. It could only ever run
+       after the fact before, on a stitched reconstruction; now it runs on the live
+       signal, which is what the whole recording is judged on.
+       Retuned only on a real change, so an ordinary vibrato does not chase the filter. */
     /* ⚠️ THE LIVE FILTER IS FIXED AT 90-300 Hz AND MUST STAY THAT WAY.
 
        A live retune - tightening the band around the note as soon as the note was
@@ -1638,27 +629,29 @@ async function start(){
        adopted if it HEARD MORE. That is the safe place for it, and it already delivers
        the win: 63% of frames voiced live on his car audio, 77% after the second look.
        Live detection does not need the extra 14% badly enough to risk the loop.        */
-    // level for the hush, measured AFTER the filter - see the board for why that matters
-    { lvlLog.push(lv); if(d) loudRef = Math.max(loudRef*0.997, lv); }
-
-    const bar = document.getElementById('lvlbar');
-    bar.style.width = Math.min(100, lv/0.15*100) + '%';
-    bar.className = d ? '' : 'hot';
-    quietRun = lv < 0.0015 ? quietRun+1 : 0;
-    if(quietRun === Math.round(2500/HOP) && !heard){
-      document.getElementById('hint').innerHTML =
-        '<b style="color:var(--warn)">Not hearing anything.</b> The bar under the graph ' +
-        'should move when you hum. If it is dead, the mic isn’t reaching this page — ' +
-        'check the 🔒 in the address bar, or close other apps using the mic.';
-    }
     draw();
 
-    // HANDS-FREE STOP. The real use is a phone lying in the grass next to the ball
-    // while both your hands are on a club — you cannot tap to stop, and a hum that ends
-    // with someone walking over to their phone has a swing's worth of silence and
-    // footsteps welded onto the end of it. So: once a hum has actually started, going
-    // quiet for HUSH_MS ends it. Tap once, hum, swing, look down at the score.
-    const ARM_MS = 500;
+    /* HANDS-FREE STOP.
+       Brixton: "I don't want to have to hit recording, tap to stop. That's gonna be
+       annoying for golfers." He is right, and it is not a convenience issue - the real
+       use is a phone lying in the grass next to the ball with BOTH hands on a club. You
+       cannot tap to stop, and a recording that ends when someone walks over to their
+       phone has a swing's worth of silence and footsteps welded onto the end of it,
+       which the scorer then has to guess its way past.
+
+       So: once a hum has actually STARTED, going quiet ends it. Tap once, hum, swing,
+       pick the phone up and read the score.
+
+       The threshold is HUSH_MS = 1400 ms and it must not go lower: the hum often pauses
+       AT the strike, and that pause is the tension being measured. At 900 ms the
+       recorder stopped during the pause and threw the follow-through away. */
+    /* 1800 ms, raised from 1400. A crack IS a silence - the voice cuts out for a
+       moment, which is exactly the event being measured - so the hush window has to be
+       comfortably longer than the longest real break. Measured on his own reference
+       recordings, breath holds run to 810 ms; a bad crack is longer still. Stop too
+       eagerly and the recorder ends mid-crack and throws away the follow-through, which
+       is the half that answers the question. */
+    const HUSH_MS = 1800, ARM_MS = 500;
     /* WHAT ARMS THE STOP, and why it is not "any pitch".
        Brixton: "if I put the phone down and make a swing five seconds later, you're
        telling me you're not gonna pick up on that."
@@ -1669,17 +662,17 @@ async function start(){
        stopped, before he had even taken the club back. So it now takes ~0.5 s of
        actual pitch to count as a hum starting. Noise cannot arm it; a hum can.        */
     if(!heard){
-      const need = Math.round(ARM_MS/HOP);
-      const recent = frames.slice(-need);
+      const need = Math.round(ARM_MS/H.HOP);
+      const recent = H.getFrames().slice(-need);
       if(recent.length >= need && recent.filter(f=>f.hz).length >= need-1) heard = true;
     }
     if(heard){
-      /* TOLERANT, NOT ABSOLUTE. `quiet.every(f=>!f.hz)` demands 1.8 s in which not one
+      /* TOLERANT, NOT ABSOLUTE. `tail.every(f=>!f.hz)` demands 1.8 s in which not one
          40 ms frame reads as pitch, and at a range nobody clears that bar: a voice two
          bays over, a gust, a scuff - one stray frame anywhere in forty-five resets the
          whole window and the recording never ends. The golfer stands there waiting for
-         a score that is not coming, which is the exact thing Brixton hit: "if the hum
-         finishes, you gotta show the score." Nine frames in ten silent IS silence. */
+         a score that is not coming. Brixton: "if the hum finishes, you gotta show the
+         score." Nine frames in ten being silent IS silence. */
       /* ⚠️ THE QUIET FLOOR IS SET BETWEEN THE BACKGROUND AND HIS HUM, NOT AS A FRACTION
          OF HIS HUM. Getting this wrong is why he had to reach over and hit stop.
 
@@ -1702,7 +695,7 @@ async function start(){
          inside 1.8 seconds should not reset the whole window. Level is a far steadier
          signal than pitch, so a tolerance here does not cause the mid-hum stop that the
          same tolerance on PITCH caused earlier today. */
-      const need = Math.round(HUSH_MS/HOP);
+      const need = Math.round(HUSH_MS/H.HOP);
       const sorted = [...lvlLog].sort((a,b)=>a-b);
       const ambient = sorted.length ? sorted[Math.floor(sorted.length*0.10)] : 0;
       const quietFloor = Math.max(0.0015, ambient + 0.35*Math.max(0, loudRef-ambient));
@@ -1722,7 +715,7 @@ async function start(){
          pitch rule cut his recordings to two seconds. Requiring the level to have fallen
          well below his hum as well means a loud voice can never be declared finished. */
       const quietByPitch = (()=>{
-        const fr = frames.slice(-need);
+        const fr = H.getFrames().slice(-need);
         if(fr.length < need) return false;
         const silent = fr.filter(f=>!f.hz).length >= need*0.90;
         return silent && lvlLog[lvlLog.length-1] < loudRef*0.85;
@@ -1730,30 +723,36 @@ async function start(){
       if(tail.length >= need &&
          (tail.filter(v => v < quietFloor).length >= need*0.85 || quietByPitch)) return stop();
     }
-    /* 45 s, not 15. The clock starts at the TAP, and the real sequence is tap, phone in
-       the grass, walk to the ball, set up, swing - fifteen seconds cut that off
-       mid-swing. Once a hum is heard the hush rule ends it in under two seconds anyway. */
-    if((performance.now()-t0) > 45000) stop();
-  }, HOP);
+    /* 45 s, not 15. The clock starts when they TAP, and the real sequence is: tap, put
+       the phone in the grass, walk to the ball, set up, swing. Fifteen seconds cut that
+       off mid-swing. Once a hum has been heard the hush rule ends it in under two
+       seconds anyway, so this only ever catches someone who walked away entirely. */
+    if(Date.now()-t0 > 45000) stop();
+  }, H.HOP);
 }
 
 function stop(){
   if(!running) return;
   running=false; clearInterval(timer);
   stream.getTracks().forEach(t=>t.stop()); ac.close();
-  const b=document.getElementById('go');
-  b.classList.remove('rec'); b.textContent='Tap to start humming';
-  document.getElementById('state').textContent='done';
+  const b=document.getElementById('go'); b.classList.remove('rec'); b.textContent='Hum again';
+  heard=false;
 
-  /* THE SECOND LOOK. Live detection runs on unfiltered audio because it has to answer
-     inside 40 ms. Now that the recording is finished there is time to do it properly:
-     filter, find the note, filter tightly around it, and re-read the whole thing. On his
-     car recording this turned 2 usable frames into 35. */
-  const liveHz = frames.map(f=>f.hz);   // the track he actually watched. Never lose it.
+  /* THE SECOND LOOK — see the note above retrack(). Live detection answers in 40 ms on
+     unfiltered audio; this re-reads the finished recording with the note-centred filter.
+     On his 70 mph car recording it turned 2 usable frames into 35. */
+  /* ── KEEP WHAT THE APP ACTUALLY HEARD ─────────────────────────────────────────
+     iOS does NOT hand a web page the microphone that Voice Memos gets. Every fix in this
+     project was tuned against Voice Memo recordings, and the deployed code scores those
+     95.3 and 97.5 - while the same hum, same distance, through this page, reads 65. The
+     tuning corpus was never the input. So the page now keeps its own recording and can
+     hand it over, which is the only way to test what actually happens here. */
+  lastPCM = Float32Array.from(pcmLog); lastSR = ac.sampleRate;
+  const liveHz = H.getFrames().map(f=>f.hz);  // the track he watched. Never lose it.
   if(pcmLog.length > 4096){
     try{
-      const pcm = Float32Array.from(pcmLog);
-      const re = retrack(pcm, ac ? ac.sampleRate : sampleRate, HOP, 2048);
+      const re = retrack(Float32Array.from(pcmLog), ac.sampleRate, H.HOP, 2048);
+      const cur = H.getFrames();
       /* ⚠️ ADOPT OR REJECT AS A WHOLE, AND ONLY IF IT HEARD MORE.
 
          This used to overwrite every frame unconditionally. `if(r)` was testing an
@@ -1768,424 +767,691 @@ function stop(){
          hears less, it is wrong, and the live track stands. */
       const liveOn = liveHz.filter(Boolean).length;
       const reOn   = re ? re.filter(f=>f&&f.hz).length : 0;
-      if(re && re.length >= frames.length*0.6 && reOn > liveOn){
-        for(let i=0;i<frames.length;i++){
+      if(re && re.length >= cur.length*0.6 && reOn > liveOn){
+        for(let i=0;i<cur.length;i++){
           const r = re[Math.min(i, re.length-1)];
-          frames[i].hz = r ? r.hz : 0;
-          frames[i].clarity = r ? r.clarity : 0;
+          cur[i].hz = r ? r.hz : 0;
+          cur[i].clarity = r ? r.clarity : 0;
         }
       }
-    }catch(e){ /* if anything goes wrong, the live track is still there */ }
+    }catch(e){}
   }
-  /* ALWAYS SCORE IT - the backstop. If anything above still left us with nothing to
-     read, put the live track back rather than tell a golfer who just hummed into the
-     phone that we heard no hum. A wrong score is recoverable; they hum again. A refusal
-     is not - they conclude it is broken, and nobody ever reports it. */
-  { let on=0; for(const f of frames) if(f.hz) on++;
-    if(on < 10) for(let i=0;i<frames.length;i++) frames[i].hz = liveHz[i]; }
+  /* ALWAYS SCORE IT - the backstop. If anything above still left nothing to read, put
+     the live track back rather than tell a golfer who just hummed that we heard no hum.
+     A wrong score is recoverable; they hum again. A refusal is not. */
+  { const cur = H.getFrames(); let on=0; for(const f of cur) if(f.hz) on++;
+    if(on < 10) for(let i=0;i<cur.length;i++) cur[i].hz = liveHz[i]; }
 
-  // trim leading/trailing silence so a slow start doesn't count as a crack
-  let a=0,z=frames.length-1;
-  while(a<frames.length && !frames[a].hz) a++;
-  while(z>0 && !frames[z].hz) z--;
-  frames = frames.slice(a, z+1);
-  // the rumble track is per-frame, so it has to take EVERY trim the frames take or the
-  // wind filter lines gusts up against the wrong moments
-  rumbleTrack = rumbleTrack.slice(a, z+1);
-  lvlLog = lvlLog.slice(a, z+1);
+  let fr = H.getFrames();
+  let a=0, z=fr.length-1;
+  while(a<fr.length && !fr[a].hz) a++;
+  while(z>0 && !fr[z].hz) z--;
+  /* If we genuinely refuse, CLEAR THE PICTURE TOO. This returned without drawing, so
+     the last live frame stayed on screen - a full, correct-looking hum sitting directly
+     above the words "didn't hear a hum". Whatever the message says, the graph has to
+     agree with it. */
+  if(z-a < 10){ H.setFrames([]); draw();
+    document.getElementById('live').textContent =
+    'Didn’t hear a hum. Hold one note, closer to the phone.'; return; }
+  const off=a;
+  H.setFrames(fr.slice(a,z+1)); fr=H.getFrames();
+  hiBand = hiBand.slice(a,z+1); loBand = loBand.slice(a,z+1); lvlLog = lvlLog.slice(a,z+1);
 
-  // then drop one frame off each end: the attack and the release are the voice
-  // arriving and leaving, not the hum, and pitch is unsettled there by definition
-  if(frames.length > 6){ frames = frames.slice(1, -1); rumbleTrack = rumbleTrack.slice(1, -1);
-                         lvlLog = lvlLog.slice(1, -1); }
+  // ── THE WIND GATE ──────────────────────────────────────────────────────────
+  // Refuse rather than guess. A wrong score loses trust for good; "I couldn't hear
+  // that fairly" costs nothing and reads as honest.
+  const rumble = loBand.length ? loBand.reduce((s,x)=>s+x,0)/loBand.length : 0;
+  const q = H.signalQuality(fr, rumble);
+  if(!q.ok){
+    showWind(q); draw(); return;
+  }
+  clearWind();
 
-  // settle the octave before anything is measured — everything below is in cents off
-  // the note, so a frame on the subharmonic doesn't add noise, it adds 1200 cents of it
-  const voiced = frames.filter(f=>f.hz).map(f=>f.hz);
-  // THE LINE vs THE SCORE — the one design decision that makes this picture honest.
-  //
-  // Brixton: "when I make a perfectly steady hum the line stays perfect. When I don't,
-  // you can see it CRACKS. I want to show the jagged lines so people can see the spike."
-  //
-  // Both halves of that matter, and they pull against each other. Drawing the RAW track
-  // (what Nail the Pitch does) gives the drama — but on a swing hum 100% of its deep
-  // down-spikes land within 80 cents of EXACTLY an octave below the note, because when a
-  // voice goes breathy the tracker loses the fundamental and grabs the subharmonic. It
-  // does that on a PERFECT hum too: his own straight-line reference, which he graded
-  // "high 90s", picks up a fake half-second plunge to C#2. Draw raw and his perfect hum
-  // is drawn cracked. That breaks the first thing he asked for.
-  //
-  // So: correct the octave (a perfect hum draws perfect), but DO NOT smooth (jaggedness
-  // is the measurement), and mark the cracks from the SCORER, which is octave-guarded and
-  // returns zero on his perfect hum. The drama comes from real cracks, not from artifacts.
-  if(voiced.length) resolveOctaves(confirmNoteOctave(robustNote(voiced)));
-  /* THE OCTAVE LOCK, on the finished track. resolveOctaves re-asks the audio before it
-     moves anything, which is right and is why it stays - but on the board there is no
-     per-frame audio to re-ask, so it can only fix runs shorter than two frames and the
-     longer plunges survive into both the score and the line. The anchored fold closes
-     that gap: it moves a frame only when it sits within 50 cents of exactly one or two
-     octaves BELOW the confirmed note, which is the artifact and nothing else. */
-  { const ref = anchorNote(frames.filter(f=>f.hz).map(f=>f.hz));
+  const voiced = fr.filter(f=>f.hz).map(f=>f.hz);
+  if(voiced.length) H.resolveOctaves(H.confirmNoteOctave(H.robustNote(voiced)));
+
+  /* ── THE OCTAVE REFUSAL ─────────────────────────────────────────────────────
+     A note an octave below the one he sang is not a bad score, it is a WRONG one, and
+     it always reads low: 11 of the first 56 hums in the database were graded on the
+     phantom note and not one cleared 65.3. Refuse rather than guess - same doctrine as
+     the wind gate. See registerGuard() in hum-core.js for the mechanism and the data. */
+  { const ref0 = H.anchorNote(fr.filter(f=>f.hz).map(f=>f.hz));
+    const hist = Store.mine().map(r=>r.note_hz).filter(v=>v>0);
+    const g = H.registerGuard(ref0, hist);
+    if(!g.trusted){ showOctave(g); draw(); return; }
+  }
+  /* THE OCTAVE LOCK, on the finished track. resolveOctaves re-asks the AUDIO before it
+     moves anything, which is why it stays - but this page keeps no per-frame audio, so
+     it can only fix runs shorter than two frames and every longer plunge survives into
+     both the score and the line. The anchored fold closes that gap: it moves a frame
+     only when it sits within 50 cents of exactly one or two octaves BELOW the confirmed
+     note, which is the artifact and nothing else. Measured on a synthesised copy of his
+     D#3 recording: 65.9 with 12 cracks becomes 100 with 0. */
+  { const ref = H.anchorNote(fr.filter(f=>f.hz).map(f=>f.hz));
     if(ref){
-      /* ⚠️ A LENGTH LIMIT ON THE FOLD (fold dips of <=2 frames, leave longer ones as the
-         voice genuinely breaking) was written, measured and NOT taken. The reasoning is
-         sound - a tracker artifact is brief, a voice coming apart is not - but on this
-         corpus it folded ZERO frames on REF3 and moved the worst noise drop the wrong
-         way, 33.0 to 33.7. No measured benefit, so it does not ship. `foldRun` is left
-         in hum-core.js for the next attempt; the corpus needs a clip where a real break
-         lands on an octave before this can be judged. */
-      frames.forEach(f=>{ if(f.hz) f.hz = foldOctave(f.hz, ref); });
-      /* ── THE ON-NOTE GATE ──────────────────────────────────────────────────────
-         A hum is ONE note. Now that the recording is finished and the note has been
-         confirmed against the audio, a frame 400 cents away from it is not him
-         cracking - a crack returns to the note, and it returns within a few frames.
-         It is the detector finding a "pitch" in a passing car, and outdoors it does
-         that constantly: his road test drew a forest of spikes that had nothing to do
-         with his voice, and every one of them was scored as a break in it.
-
-         Marking those frames unvoiced is the honest reading - we did not hear the hum
-         there - and it is the reason this can only be done at the END. Live, there is
-         no note estimate trustworthy enough to throw a frame away on. */
-      let killed = 0;
-      frames.forEach(f=>{ if(f.hz && !onNote(f.hz, ref)){ f.hz = 0; killed++; } });
-      window.__offNote = killed;
+      fr.forEach(f=>{ if(f.hz) f.hz = H.foldOctave(f.hz, ref); });
+      /* THE ON-NOTE GATE. A hum is ONE note, and now that the recording is finished the
+         note is trustworthy. A frame 400 cents off it is not him cracking - a crack
+         returns to the note within a few frames - it is the detector finding a "pitch"
+         in a passing car. Outdoors that drew a forest of spikes with nothing to do with
+         his voice, and every one was scored as a break in it. Only possible at the END:
+         live, no note estimate is good enough to throw a frame away on. */
+      fr.forEach(f=>{ if(f.hz && !H.onNote(f.hz, ref)) f.hz = 0; });
     } }
-  frames.forEach(f => { f.drawHz = f.hz; });      // corrected, but NOT de-hashed
-  deHash();
+  fr.forEach(f=>{ f.drawHz=f.hz; });
+  H.deHash();
 
-  /* ── THE OCTAVE FLOOR ───────────────────────────────────────────────────────
-     This is NOT the wind gate coming back. Brixton was right that a bit of noise must
-     never stop a score - imperfect conditions still produce a readable hum. This is the
-     other case: the note itself came out an octave below the one that was sung, so the
-     number would not be harsh, it would be WRONG. 11 of the first 56 hums in the
-     database were graded on that phantom note and not one cleared 65.3.
+  const s = H.score(loBand, lvlLog);  // rumble + per-frame HUM-BAND LEVEL. The level is
+                                      // what separates "his voice broke" from "we lost him".
+  if(!s){ document.getElementById('live').textContent='Not enough of a hum to score.'; return; }
 
-     Below 95 Hz nothing real has ever appeared in 84 recordings - his hums, strangers,
-     IG golfers, range audio - where the lowest TRUE note is 103.3 Hz. This page keeps no
-     identity, so it gets the floor only; the board also checks the player's own register.
-     Cause: a reflection near half the pitch period, i.e. the phone flat on the ground. */
-  { const refN = anchorNote(frames.filter(f=>f.hz).map(f=>f.hz));
-    if(refN && refN < 95){
-      document.getElementById('hint').innerHTML =
-        '<b style="color:var(--warn)">Couldn\u2019t read your note \u2014 hum that one again.</b> ' +
-        'That came through an octave below where you were actually humming, so any score would be wrong. ' +
-        'Stand the phone up against something instead of flat on the ground, or come a step closer.';
-      return;
-    } }
+  // Impact is a LANDMARK, not the end of the hum. He hums through the strike; when
+  // the hum STOPS at the strike, that is the restriction we are looking for.
+  const imp = H.findImpact(hiBand);
+  s.impact = imp;
+  s.through = imp ? H.throughImpact(fr, imp.frame, 400) : null;
 
-  const s = score(rumbleTrack, lvlLog);
-  window.__lastScore = s;          // draw() marks the cracks from this
+  window.__lastScore = s;
   draw();
-  if(!s){ document.getElementById('hint').textContent =
-    'Didn’t hear a hum. Get closer to the mic and hold one note.'; return; }
-  /* ── THE WIND GATE ──────────────────────────────────────────────────────────
-     REFUSE, don't guess. This page is about to be handed to strangers standing on
-     a driving range, and one of Brixton's own range clips found ZERO hums until it
-     was high-passed. A wrong score loses that person permanently; "I couldn't hear
-     that one fairly" costs nothing and reads as honest.
+  showResult(s);
+}
+document.getElementById('go').onclick = start;
+{ const b=document.getElementById('sendrec'); if(b) b.onclick = saveRecording; }
 
-     Three checks, because wind fails three different ways and rarely trips only one:
-       CLARITY  - the detector's own confidence. Wind makes it guess.
-       VOICED % - wind masks the fundamental, so frames stop resolving at all.
-       RUMBLE   - sub-100 Hz energy, which is wind and is not a hum.               */
-  /* ══ THE RULE, REWRITTEN 2026-08-19 ═════════════════════════════════════════
-     ALWAYS SCORE IT. Only refuse when there is genuinely no hum to read.
+function showWind(q){ clearOctaveNoop();
+  const why = q.fails.includes('rumble') ? 'Too much wind on the mic.'
+            : q.fails.includes('voiced') ? 'I lost the note too often to score that.'
+            : 'Too much background noise to score that fairly.';
+  document.getElementById('blocker').innerHTML =
+    '<div class="warnbox"><b>⚠️ Too windy — hum that one again</b>' + why +
+    ' Turn out of the wind, or cup a hand round the phone, and go again.' +
+    ' <span class="hint">(I’d rather give you nothing than give you a wrong number.)</span></div>';
+  document.getElementById('res').style.display='none';
+}
+function clearWind(){ document.getElementById('blocker').innerHTML=''; }
 
-     Brixton, trying to record in a car: "You're making it frustrating. If it's a
-     little bit of background noise, you're saying you can't read it. Just try to read
-     the hum as best you can even with the wind."
+/* The octave refusal reads as advice, not as a fault, because the fix is real: the phone
+   on the ground bouncing your voice back at itself is what breaks the note reading, and
+   picking it up genuinely solves it. */
+function clearOctaveNoop(){}
+function showOctave(g){
+  const why = g.why==='below-floor'
+    ? 'That came through an octave below where you were actually humming'
+    : 'That read well below your usual note';
+  document.getElementById('blocker').innerHTML =
+    '<div class="warnbox"><b>\u26a0\ufe0f Couldn\u2019t read your note \u2014 hum that one again</b>' +
+    why + ', so any score would be wrong. ' +
+    'Take a step closer to the phone, or tilt it up on your bag, and go again.' +
+    ' <span class="hint">(I\u2019d rather give you nothing than give you a wrong number.)</span></div>';
+  document.getElementById('res').style.display='none';
+}
 
-     He is right, and I had the evidence and drew the wrong conclusion from it. The
-     synthetic wind suite showed that noise almost never breaks the score — a 25 mph
-     gale still scored a clean hum 100.0. I built refusals anyway, and the result is a
-     golfer standing at a windy range being told "no" over and over while the scorer
-     sitting behind the message would have been right every time.
+/* ── THE TRACE ────────────────────────────────────────────────────────────────
+   Same rules the live meter settled on: octave-corrected so a perfect hum draws a
+   perfect line, never smoothed because the jaggedness IS the measurement, cracks
+   marked from the scorer, and a spike drawn at full depth rather than clamped.   */
+function draw(){
+  const w=cv.clientWidth, h=cv.clientHeight;
+  ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d1420'; ctx.fillRect(0,0,w,h);
+  const fr=H.getFrames(); const v=fr.filter(f=>f.hz);
+  const GUT=40;
+  if(v.length<2){
+    ctx.strokeStyle='#182234'; ctx.lineWidth=1;
+    for(let i=1;i<5;i++){const y=h*i/5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+    return;
+  }
+  const med=H.median(v.map(f=>f.hz));
+  const VIEW_MAX=1500;
+  const cAll=fr.map(f=>{const hz=f.drawHz!==undefined?f.drawHz:f.hz;
+    return hz?1200*Math.log2(hz/med):null;}).filter(x=>x!==null).sort((a,b)=>a-b);
+  const qq=t=>cAll[Math.min(cAll.length-1,Math.max(0,Math.round(t*(cAll.length-1))))];
+    // ⚠️ THE ZOOM IS THE MOST-GOT-WRONG THING ON THIS PAGE, twice now.
+  // Nail the Pitch draws roughly 3 octaves. At +/-350 cents this canvas was FIVE TIMES
+  // more zoomed in, so identical audio that reads as a dead-flat line in NTP came out
+  // visibly zigzagging here - and Brixton's reaction was the correct one: "I got a 97
+  // but the line zigzagged a lot, I don't want it flush when my hum is perfect."
+  // The trace is EVIDENCE. Evidence with the gain cranked up is not more informative,
+  // it is less trustworthy - and it contradicts the number sitting next to it.
+  const FLOOR = 900;   // +/-900c = 1.5 octaves, close to what a pitch monitor shows
+  let lo=Math.min(-FLOOR,qq(0.02)), hi=Math.max(FLOOR,qq(0.98));
+  const pad=(hi-lo)*0.10; lo=Math.max(lo-pad,-VIEW_MAX); hi=Math.min(hi+pad,VIEW_MAX);
+  const yOf=hz=>h-((1200*Math.log2(hz/med))-lo)/(hi-lo)*h;
 
-     A wrong score is recoverable — they hum again. A refusal is not: they conclude it
-     is broken and never come back, and unlike a wrong score nobody ever reports it.
-
-     So the ONLY refusal left is "I could not find a hum in that" — a fact, not a
-     judgement about conditions. Everything else scores, and if it was rough the score
-     carries a note saying so. Tell them the number AND the caveat; do not withhold
-     the number because of the caveat.                                                */
-  const voicedPct = frames.length ? frames.filter(f=>f.hz).length/frames.length : 0;
-  const rumble = rumbleTrack.length
-    ? rumbleTrack.reduce((a,b)=>a+b,0)/rumbleTrack.length : 0;
-  // GUSTS hide inside an average. Wind is peaky, so the mean is dominated by the calm
-  // between gusts; measured on synthetic wind, clean audio tops out at p90 = 0.32 while
-  // anything windy is 0.46+. The mean does not separate them at all.
-  const rsorted = [...rumbleTrack].sort((a,b)=>a-b);
-  const rumbleP90 = rsorted.length
-    ? rsorted[Math.min(rsorted.length-1, Math.round(0.90*(rsorted.length-1)))] : 0;
-  // FRAGMENTATION — caught by the regression suite, not by eye. A track that flips
-  // voiced/unvoiced every frame is 50% voiced (so it survives the voiced test) and the
-  // de-hash median then fills every one-frame gap, leaving a flawless flat line: a
-  // failing microphone scored 100. A real hum is a few LONG runs of pitch; a broken
-  // signal is many tiny ones.
-  const runs=[]; let rn=0;
-  for(const f of frames){ if(f.hz) rn++; else if(rn){ runs.push(rn); rn=0; } }
-  if(rn) runs.push(rn);
-  runs.sort((a,b)=>a-b);
-  const medRun = runs.length ? runs[runs.length>>1]*HOP : 0;
-  // "Did it EVER hold a note?" - NOT "is it fragmented". Measured, a real swing hum's
-  // run distribution is [1,1,1,1,1,1,1,1,2,2,3,3,4,7,…] because a swing hum CRACKS, and
-  // an earlier median-run test refused clean genuine swing hums outright. A failing mic
-  // is [1,1,1,…] and nothing else - it never sustains anything.
-  const longestMs = runs.length ? Math.max(...runs)*HOP : 0;
-  const flapping = longestMs < 400;
-
-  /* ⚠️ NO STANDALONE "TOO WINDY" REFUSAL. Removed 2026-08-19 after Brixton was refused
-     trying to record in the back of a moving car — road noise is low-frequency, exactly
-     like wind, so the rumble check fired on a recording that would have scored fine.
-
-     The evidence was already in the synthetic wind suite and I ignored it: rumble ALONE
-     does not predict a wrong score. A 25 mph gale still scored a clean hum 100.0,
-     correctly. The only condition that ever produced a WRONG number was gusty AND
-     cracked — where a gust manufactures a break that cannot honestly be blamed on the
-     golfer. That narrow rule stays; the blunt one is gone.
-
-     Refusing a hum that would have scored correctly is the worse failure. The golfer
-     gets nothing, concludes it is broken, and does not come back — and unlike a wrong
-     score, nobody ever reports it. */
-  const noHum = longestMs < 400;   // nothing ever held a note — there is nothing to score
-
-  /* THE ONE THAT REPORTED A WRONG NUMBER. In the synthetic wind suite a 10 mph gust
-     landed mid-hum and manufactured a crack: the score came back 74.3 against a clean
-     baseline of 99.6, and every gate metric looked healthy. The crack cap then did the
-     rest. So refuse NARROWLY - not "it was windy", but "it was gusty AND there is a
-     crack", which is exactly when a crack cannot honestly be attributed to the golfer.
-     Refusing every windy recording would turn away someone on an ordinary breezy day,
-     and they do not come back. A 25 mph gale still scored a clean hum 100.0, correctly. */
-  const gusty = rumbleP90 > 0.55 && s.cracks.length > 0;
-
-  if(noHum){
-    document.getElementById('hint').innerHTML =
-      '<b style="color:var(--warn)">I couldn’t find a hum in that.</b> ' +
-      'Hold ONE note out loud and keep it going — closer to the phone if you can.';
-    document.getElementById('res').classList.remove('on');
-    return; }
-
-  const [bd,col,say] = verdict(s);
-  document.getElementById('sc').textContent = s.total.toFixed(0);
-  document.getElementById('sc').style.color = col;
-  document.getElementById('bd').textContent = bd;
-  document.getElementById('bd').style.color = col;
-  setSay(say);
-  // ONE number, not two.
-  //
-  // "Wobble" and "drift" are what the score is actually made of, but they are engineer
-  // words: a golfer reading "drift 41 cents" on a phone learns nothing, and a row that
-  // needs explaining costs more trust than it earns. They still drive the score exactly
-  // as before — they are simply added up and shown as the thing they jointly measure,
-  // which is whether the note was held.
-  document.getElementById('m0').textContent =
-    noteOf(s.note).name + '  ·  ' + s.note.toFixed(0) + ' Hz';
-  document.getElementById('m1').innerHTML = s.cracks.length
-    ? '<b style="color:var(--bad)">' + s.cracks.map(c=>c.at.toFixed(1)+'s').join(', ') + '</b>'
-    : '<b style="color:var(--go)">never cracked ✓</b>';
-  document.getElementById('m4').textContent = s.cracks.length
-    ? s.cracks.length + ' crack' + (s.cracks.length>1?'s':'') + ' · first at ' + s.cracks[0].at.toFixed(1) + 's'
-    : s.tension.length
-    ? s.tension.length + ' stop' + (s.tension.length>1?'s':'') + ' · first at ' + s.tension[0].at.toFixed(1) + 's'
-    : Math.round(s.onAir) + '% on · ' + s.held.toFixed(1) + 's';
-  const pctBeat = beats(s.total);
-  // "Better than X%" is the one line worth keeping even on a low score — it is a fact
-  // about them, not advice at them.
-  setSay(say, pctBeat ? 'Better than ' + pctBeat + '% of hums measured.' : '');
-  drawCard(s, bd, col, pctBeat);
-  logAttempt(s, bd);
-  logHum(s, bd);          // usage + the scores, if CLOUD is configured
-  /* ── IMPACT ────────────────────────────────────────────────────────────────
-     Brixton, 2026-08-18: "you hum in your backswing, then you hit the ball, then
-     you hum in your follow-through. Sometimes it WILL stop at impact though -
-     that's where your hum gets restricted."
-
-     So impact is a LANDMARK INSIDE the hum, never the end of it. The hum after the
-     ball is the half that matters: whether the sound survived the strike is the
-     whole claim.
-
-     Only the STRONGEST transient inside the hum counts. Validated on his own range
-     audio: scanning the whole recording found all 4 impacts but also 9 false
-     positives - which is what a driving range IS, other people hitting balls.
-     Constrained to the hum, it is 4/4 within 0.35 s and zero false positives.     */
-  const impact = (()=>{
-    if(hiTrack.length < 6) return null;
-    let best=-1, bestR=0;
-    for(let i=3;i<hiTrack.length-1;i++){
-      const before=(hiTrack[i-3]+hiTrack[i-2]+hiTrack[i-1])/3;
-      const r = before>1e-9 ? hiTrack[i]/before : 0;
-      if(r>bestR){ bestR=r; best=i; }
+  const centre=H.noteOf(med);
+  const sLo=Math.floor(lo/100)-1, sHi=Math.ceil(hi/100)+1;
+  ctx.font='9px -apple-system,system-ui,sans-serif'; ctx.textBaseline='middle';
+  const dense=(sHi-sLo)>26;
+  for(let s=sLo;s<=sHi;s++){
+    const yT=yOf(centre.hz*Math.pow(2,(s+0.5)/12)), yB=yOf(centre.hz*Math.pow(2,(s-0.5)/12));
+    if(yB<0||yT>h) continue;
+    const nm=H.noteOf(centre.hz*Math.pow(2,s/12));
+    const black=nm.name.includes('♯');
+    ctx.fillStyle = black?'rgba(255,255,255,.010)':'rgba(255,255,255,.026)';
+    ctx.fillRect(GUT,Math.max(0,yT),w-GUT,Math.min(h,yB)-Math.max(0,yT));
+    ctx.strokeStyle=(s===0)?'#33475f':'#141d2b'; ctx.lineWidth=(s===0)?1.4:1;
+    ctx.beginPath(); ctx.moveTo(GUT,yB); ctx.lineTo(w,yB); ctx.stroke();
+    const yc=(yT+yB)/2;
+    if(yc>7&&yc<h-7&&(!dense||s%2===0||s===0)){
+      ctx.fillStyle=(s===0)?'#9fb4cd':'#46586e'; ctx.fillText(nm.name,4,yc);
     }
-    return bestR>=6 ? {frame:best, ratio:bestR} : null;
-  })();
-  let through = null;
-  if(impact){
-    const w=Math.max(2,Math.round(400/HOP));
-    const after=frames.slice(impact.frame, impact.frame+w);
-    const before=frames.slice(Math.max(0,impact.frame-w), impact.frame);
-    const aOn=after.filter(f=>f.hz).length/Math.max(after.length,1);
-    const bOn=before.filter(f=>f.hz).length/Math.max(before.length,1);
-    through={after:aOn, before:bOn, survived:aOn>=0.5, restrictedAt:(aOn<0.5&&bOn>=0.5)};
   }
-  s.impact=impact; s.through=through;
-  window.__lastScore=s; draw();
+  const S=window.__lastScore;
+  ctx.save(); ctx.beginPath(); ctx.rect(GUT,0,w-GUT,h); ctx.clip();
+  ctx.lineWidth=1.5; ctx.lineJoin='miter'; ctx.lineCap='butt'; ctx.strokeStyle='#f2f6fb';
+  let pen=false; ctx.beginPath();
+  fr.forEach((f,i)=>{
+    const x=GUT+i/(Math.max(fr.length,1)-1)*(w-GUT);
+    const hz=f.drawHz!==undefined?f.drawHz:f.hz;
+    if(!hz){pen=false;return;}
+    const y=yOf(hz);
+    if(!pen){ctx.moveTo(x,y);pen=true;}else ctx.lineTo(x,y);
+  });
+  ctx.stroke(); ctx.restore();
 
-  const m4=document.getElementById('m4');
-  if(m4) m4.innerHTML = !through ? 'no strike heard'
-    : through.survived ? '<b style="color:var(--go)">held it through ✓</b>'
-                       : '<b style="color:var(--bad)">stopped at the ball</b>';
-  // With the ball located, a crack time becomes a coaching instruction rather than a
-  // stopwatch reading: "0.4s BEFORE you hit it" beats "at 1.8s" every time.
-  if(impact && s.cracks.length){
-    const t0i = impact.frame*HOP/1000;
-    document.getElementById('m1').innerHTML = '<b style="color:var(--bad)">' +
-      s.cracks.map(c=>{ const d=c.at-t0i;
-        return Math.abs(d)<0.08 ? 'at the ball'
-             : (Math.abs(d).toFixed(1)+'s '+(d<0?'before':'after')+' the ball'); }).join(', ')
-      + '</b>';
+  // impact — a blue landmark, deliberately NOT the same colour as a crack, because
+  // hitting the ball is not a mistake
+  if(S && S.impact){
+    const x=GUT+(S.impact.frame+(S.humStart||0))/(Math.max(fr.length,1)-1)*(w-GUT);
+    ctx.strokeStyle='#7fd4ff'; ctx.lineWidth=1.2; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#7fd4ff'; ctx.font='700 10px -apple-system,system-ui,sans-serif';
+    ctx.fillText('IMPACT', x+4, 12);
   }
-  if(through && through.restrictedAt)
-    setSay('You lost the hum right at the ball. That is where you tightened up.');
-  else if(through && through.survived && !s.cracks.length)
-    setSay('Held it through the ball.');
-
-  /* Rough conditions are a NOTE on the score, never a reason to withhold it. */
-  const rough = (rumbleP90 > 0.55) || (s.rough) || (voicedPct < 0.45);
-  const noteEl = document.getElementById('roughNote');
-  if(noteEl){
-    noteEl.style.display = rough ? '' : 'none';
-    noteEl.textContent = gusty
-      ? 'Noisy recording — that break might be the wind rather than you.'
-      : 'Noisy recording, so treat this one as a rough guide.';
+  if(S && S.cracks && S.cracks.length){
+    S.cracks.forEach(c=>{
+      const fi=Math.round(c.at*1000/H.HOP)+(S.humStart||0);
+      const x=GUT+fi/(Math.max(fr.length,1)-1)*(w-GUT);
+      ctx.strokeStyle='#ff6b6b'; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+      ctx.fillStyle='#ff6b6b'; ctx.beginPath();
+      ctx.moveTo(x-4.5,1); ctx.lineTo(x+4.5,1); ctx.lineTo(x,9); ctx.closePath(); ctx.fill();
+    });
   }
+}
 
+/* ── RESULT ─────────────────────────────────────────────────────────────────── */
+let pendingHum = null;
+/* Write the captured audio out as a WAV and hand it to the iOS share sheet, so the exact
+   thing the page heard can be sent on and analysed. */
+function saveRecording(){
+  if(!lastPCM || !lastPCM.length){ alert('Hum once first.'); return; }
+  const n=lastPCM.length, sr=lastSR;
+  const buf=new ArrayBuffer(44+n*2), v=new DataView(buf);
+  const w=(o,str)=>{ for(let i=0;i<str.length;i++) v.setUint8(o+i, str.charCodeAt(i)); };
+  w(0,'RIFF'); v.setUint32(4,36+n*2,true); w(8,'WAVEfmt '); v.setUint32(16,16,true);
+  v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true);
+  v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,'data'); v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){ const x=Math.max(-1,Math.min(1,lastPCM[i]));
+    v.setInt16(44+i*2, x<0 ? x*0x8000 : x*0x7FFF, true); }
+  const blob=new Blob([buf],{type:'audio/wav'});
+  const file=new File([blob],'hum-as-the-app-heard-it.wav',{type:'audio/wav'});
+  if(navigator.canShare && navigator.canShare({files:[file]}))
+    navigator.share({files:[file], title:'Hum recording'}).catch(()=>{});
+  else {
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='hum-as-the-app-heard-it.wav';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+}
+function showResult(s){
+  const b = s.total>=H.CAL.bands.ELITE ? ['ELITE','var(--go)']
+          : s.total>=H.CAL.bands.CLEAN ? ['CLEAN','var(--ok)']
+          : s.total>=H.CAL.bands.SHAKY ? ['SHAKY','var(--warn)']
+          : ['NEEDS WORK','var(--bad)'];
+  document.getElementById('sc').textContent = s.total.toFixed(0);
+  document.getElementById('sc').style.color = b[1];
+  document.getElementById('bd').textContent = b[0];
+  document.getElementById('bd').style.color = b[1];
+
+  let say;
+  if(s.through && s.through.restrictedAt)
+    say = 'You lost the hum right at the ball. That is where you tightened up.';
+  else if(s.cracks.length)
+    say = 'Cracked ' + (s.cracks.length===1?'once':s.cracks.length+' times')
+        + ', first at ' + s.cracks[0].at.toFixed(1) + 's. Anything that cracks caps at 75.';
+  else if(s.through && s.through.survived)
+    say = 'Held it through the ball.';
+  else say = b[0]==='ELITE' ? 'One line the whole way. Nothing broke.'
+           : b[0]==='CLEAN'   ? 'Held one note the whole way.' : '';
+  document.getElementById('sy').textContent = say;
+
+  document.getElementById('m2').textContent = !s.through ? 'no strike heard'
+      : s.through.survived ? 'held it ✓' : 'stopped at the ball';
+  document.getElementById('m3').textContent = s.cracks.length
+      ? s.cracks.length+' · first '+s.cracks[0].at.toFixed(1)+'s' : 'none';
+  document.getElementById('res').style.display='';
+
+  pendingHum = {
+    hum_id: uid(), player_id: ME, name: NAME || null,
+    at: new Date().toISOString(),
+    score: +s.total.toFixed(1), band: b[0],
+    line: +s.line.toFixed(1), on_air: +s.onAir.toFixed(1),
+    note_hz: +s.note.toFixed(1), note_name: H.noteOf(s.note).name,
+    jitter: +s.jitter.toFixed(1), tilt: Math.round(s.tilt),
+    cracks: s.cracks.length, tension: s.tension.length,
+    through_impact: s.through ? (s.through.survived?1:0) : null,
+    span_s: +s.span.toFixed(2), strike: null,
+    // WHERE the hum broke, measured from the ball rather than from the start of the
+    // recording. Seconds-from-impact is the only frame of reference that is comparable
+    // between two swings - "cracked at 1.8s" means nothing, "cracked 0.4s before you hit
+    // it" is a coaching instruction. This one column is what makes the tension insight
+    // possible, and it costs nothing to store.
+    crack_rel: (s.impact && s.cracks.length)
+      ? s.cracks.map(c => +(c.at - s.impact.frame*H.HOP/1000).toFixed(2)) : null,
+    impact_at: s.impact ? +(s.impact.frame*H.HOP/1000).toFixed(2) : null
+  };
   const hs=document.getElementById('hsHint');
   if(hs && /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.navigator.standalone)
     hs.style.display='';
-
-  const cta = document.getElementById('cta');
-  if(cta) cta.style.display = '';
-  document.getElementById('res').classList.add('on');
+  Store.add(pendingHum).then(()=>{ paintMe(); paintAll(); });
+  if(document.getElementById('card')) drawShareCard(s);
+  buildStrike();
 }
 
-// ── diagnostics ──────────────────────────────────────────────────────────────
-// Every attempt is kept, in this browser only, so the scoring can be calibrated on
-// real hums from a real phone instead of on a hunch about what "feels" too low.
-let attempts = [];
-function logAttempt(s, band){
-  attempts.push({ score:s.total, band, note:+s.note.toFixed(1),
-                  line:+s.line.toFixed(1), onAir:+s.onAir.toFixed(1),
-                  jitter:+s.jitter.toFixed(1), tilt:Math.round(s.tilt),
-                  tension:s.tension.length, cracks:s.cracks.length, capped:s.capped,
-                  tensionAt:s.tension.map(t=>+t.at.toFixed(2)),
-                  held:+s.held.toFixed(1), span:+s.span.toFixed(1),
-                  clarity:+s.purity.toFixed(2) });
-  try{ localStorage.setItem('humAttempts', JSON.stringify(attempts.slice(-40))); }catch(e){}
-  document.getElementById('dcount').textContent =
-    attempts.length + (attempts.length===1?' attempt':' attempts') + ' this session';
+/* ── THE STRIKE RATING ────────────────────────────────────────────────────────
+   One tap, right after the score, while the shot is still in their hands.
+   This is the whole point of the product: hum score paired with strike quality is
+   the only data that can prove — or kill — "the finer your hum, the better you hit
+   it." Self-rating is noisy per shot and perfectly fine in aggregate.            */
+function buildStrike(){
+  const wrap=document.getElementById('strike'); wrap.innerHTML='';
+  document.getElementById('strikeDone').style.display='none';
+  for(let i=0;i<=10;i++){
+    const b=document.createElement('button');
+    b.textContent = i;
+    if(i<5) b.style.borderColor='#4a2828';
+    if(i>=8) b.style.borderColor='#1e4436';
+    b.onclick=()=>{
+      [...wrap.children].forEach(c=>c.classList.remove('sel'));
+      b.classList.add('sel');
+      if(pendingHum){
+        pendingHum.strike=i; Store.patch(pendingHum.hum_id,{strike:i}).then(paintMe);
+        const d=document.getElementById('strikeDone');
+        d.style.display=''; d.innerHTML = strikeInsight(i);
+      }
+    };
+    wrap.appendChild(b);
+  }
 }
-try{ attempts = JSON.parse(localStorage.getItem('humAttempts')||'[]'); }catch(e){ attempts=[]; }
 
-if(new URLSearchParams(location.search).has('debug'))
-  document.getElementById('diag').style.display = '';
+/* ── WHAT TO SAY BACK WHEN THEY RATE A STRIKE ────────────────────────────────
+   "Logged." is a receipt, not an answer. The pairing they just handed over - this hum
+   score with this strike - IS the product thesis, so the moment they complete it is the
+   one moment they are owed something in return.
 
-document.getElementById('share').onclick = async () => {
-  const url = 'https://brixton-collab.github.io/hum-meter/';
-  const sc = document.getElementById('sc').textContent;
-  const txt = 'I scored ' + sc + ' on the Hum Meter. See if you can hold yours through the ball.';
-  const b = document.getElementById('share');
-  // The native share sheet is the whole point on a phone — it puts the link one tap from
-  // their group chat, which is where golf bets actually live.
-  if(navigator.share){
-    try{ await navigator.share({title:'Hum Meter', text:txt, url}); return; }catch(e){}
+   Three cases, in order of how much data exists:
+     · not enough yet  -> tell them exactly how many more it takes. A countdown is a
+                          reason to hum again; "logged" is a full stop.
+     · enough          -> compare THIS pairing to their own pattern, in their numbers.
+     · a mismatch      -> say so. A 95 hum that produced a 3 strike is the most
+                          interesting thing that can happen and it should not be swallowed.       */
+function strikeInsight(strike){
+  const rated = Store.mine().filter(r=>r.strike!=null);
+  const NEED = 5;
+  if(rated.length < NEED){
+    const left = NEED - rated.length;
+    return 'Logged. <b>' + left + ' more rated shot' + (left>1?'s':'') +
+           '</b> and I can show you which hum score your best strikes come from.';
   }
-  try{ await navigator.clipboard.writeText(txt + ' ' + url);
-       b.textContent='✅ Copied — go paste it'; }
-  catch(e){ b.textContent = url; }
-  setTimeout(()=>{ b.textContent='📋 Copy the link'; }, 2600);
-};
-
-document.getElementById('dcopy').onclick = async () => {
-  const txt = 'HUM METER — ' + attempts.length + ' attempts (steadiness = % of span on your own line, tol '
-    + TOL_CENTS + 'c)\n'
-    + attempts.map(a=>`score ${a.score} ${a.band} | note ${a.note}Hz | line ${a.line} | onAir ${a.onAir} | jitter ${a.jitter}c | tilt ${a.tilt}c | cracks ${a.cracks}${a.capped?' (CAPPED)':''} | tension ${a.tension} @${JSON.stringify(a.tensionAt)} | span ${a.span}s | clarity ${a.clarity}`).join('\n');
-  const b = document.getElementById('dcopy');
-  try{ await navigator.clipboard.writeText(txt); b.textContent='Copied — paste it to Harry'; }
-  catch(e){ b.textContent='Copy failed — screenshot this instead'; console.log(txt); }
-};
-
-// ── the share card ───────────────────────────────────────────────────────────
-function drawCard(s, bandName, colVar, pctBeat){
-  const c = document.getElementById('card'), g = c.getContext('2d');
-  const W = 1080, H = 1350;
-  c.width = W; c.height = H;
-  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  const col = colVar.startsWith('var(') ? css(colVar.slice(4,-1)) : colVar;
-
-  g.fillStyle = '#0b0f14'; g.fillRect(0,0,W,H);
-
-  g.fillStyle = '#8ea3bd'; g.textAlign='center';
-  g.font = '600 34px -apple-system,Inter,system-ui,sans-serif';
-  g.fillText('THE HUM METER', W/2, 110);
-
-  g.fillStyle = col;
-  g.font = '800 260px -apple-system,Inter,system-ui,sans-serif';
-  g.fillText(s.total.toFixed(0), W/2, 400);
-  g.font = '700 52px -apple-system,Inter,system-ui,sans-serif';
-  g.fillText(bandName, W/2, 480);
-
-  if(pctBeat){
-    g.fillStyle = '#f2f6fb';
-    g.font = '500 36px -apple-system,Inter,system-ui,sans-serif';
-    g.fillText('Better than ' + pctBeat + '% of hums measured', W/2, 552);
+  const good = rated.filter(r=>r.strike>=7), bad = rated.filter(r=>r.strike<=4);
+  const avg = a => a.reduce((s,r)=>s+r.score,0)/a.length;
+  const s = window.__lastScore ? window.__lastScore.total : null;
+  if(good.length>=3 && bad.length>=2){
+    const g = avg(good), b = avg(bad);
+    if(g - b >= 6)
+      return 'Logged. <b>Your good strikes average a ' + g.toFixed(0) + ' hum, your bad ones ' +
+             b.toFixed(0) + '.</b> ' + (s!=null && s>=g ? 'That one was in the good range.'
+                                                        : 'That one was below your good range.');
+    return 'Logged. So far your hum score and your strikes are <b>not moving together</b> — ' +
+           'good strikes average ' + g.toFixed(0) + ', bad ones ' + b.toFixed(0) + '.';
   }
+  if(s!=null && s>=85 && strike<=4)
+    return 'Logged. <b>An elite hum and a poor strike.</b> Worth remembering — that one is unusual.';
+  if(s!=null && s<60 && strike>=8)
+    return 'Logged. <b>You flushed it on a broken hum.</b> Also unusual.';
+  return 'Logged. Keep rating them — the pattern needs both halves.';
+}
 
-  // the trace — the part that needs no explaining. Flat is good, broken is not.
-  const px=70, py=630, pw=W-140, ph=380;
-  g.fillStyle='#0d1420'; g.fillRect(px,py,pw,ph);
-  g.strokeStyle='#182234'; g.lineWidth=2;
-  for(let i=1;i<4;i++){ const y=py+ph*i/4; g.beginPath(); g.moveTo(px,y); g.lineTo(px+pw,y); g.stroke(); }
+/* ── MY BOARD ─────────────────────────────────────────────────────────────── */
+function paintMe(){
+  const rows = Store.mine();
+  const n=rows.length;
+  document.getElementById('myN').textContent = n;
+  document.getElementById('tensionCard').style.display = n ? '' : 'none';
+  document.getElementById('strikeCard').style.display  = n ? '' : 'none';
+  if(!n){ document.getElementById('myBest').textContent='—';
+          document.getElementById('myAvg').textContent='—';
+          document.getElementById('myTrend').textContent='—'; return; }
+  const best=Math.max(...rows.map(r=>r.score));
+  const avg=rows.reduce((s,r)=>s+r.score,0)/n;
+  document.getElementById('myBest').textContent=best.toFixed(0);
+  document.getElementById('myAvg').textContent=avg.toFixed(0);
+  const last=rows.slice(0,10).map(r=>r.score).reverse();
+  if(last.length>=4){
+    const h=last.length>>1;
+    const d=(last.slice(h).reduce((s,x)=>s+x,0)/(last.length-h))
+           -(last.slice(0,h).reduce((s,x)=>s+x,0)/h);
+    document.getElementById('myTrend').textContent=(d>=0?'+':'')+d.toFixed(1)+' pts';
+    document.getElementById('myTrend').style.color = d>=0?'var(--go)':'var(--bad)';
+  } else document.getElementById('myTrend').textContent='need 4 hums';
 
-  const v = frames.filter(f=>f.hz);
-  if(v.length>1){
-    const med = median(v.map(f=>f.hz)), SPAN=VIEW_CENTS;
-    g.strokeStyle=col; g.lineWidth=7; g.lineJoin='round'; g.lineCap='round';
+  const tb=document.getElementById('myRows'); tb.innerHTML='';
+  rows.slice(0,10).forEach(r=>{
+    const tr=document.createElement('tr');
+    const when=new Date(r.at); 
+    tr.innerHTML='<td>'+when.toLocaleDateString(undefined,{month:'short',day:'numeric'})+
+      ' '+when.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})+'</td>'+
+      '<td><b>'+r.score.toFixed(0)+'</b></td>'+
+      '<td>'+(r.cracks||0)+'</td><td>'+(r.strike==null?'—':r.strike)+'</td>';
+    tb.appendChild(tr);
+  });
+  sparkline(document.getElementById('spark'), rows.map(r=>r.score).reverse());
+  tensionPlot(rows);
+  scatter(rows.filter(r=>r.strike!=null));
+}
+
+function sparkline(c, vals){
+  const d=devicePixelRatio||1, r=c.getBoundingClientRect();
+  c.width=r.width*d; c.height=r.height*d;
+  const g=c.getContext('2d'); g.setTransform(d,0,0,d,0,0);
+  const w=r.width,h=r.height; g.clearRect(0,0,w,h);
+  if(vals.length<2) return;
+  // Fixed 0–100 axis on purpose: the bands are fixed so a line over weeks MEANS
+  // something. An auto-scaled sparkline would make every session look identical.
+  const yOf=v=>h-4-(v/100)*(h-8);
+  [60,70,85].forEach(b=>{ g.strokeStyle='#1b2735'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(0,yOf(b)); g.lineTo(w,yOf(b)); g.stroke(); });
+  g.strokeStyle='#3ef2a0'; g.lineWidth=2; g.lineJoin='round'; g.beginPath();
+  vals.forEach((v,i)=>{ const x=(i/(vals.length-1))*w, y=yOf(v);
+    i?g.lineTo(x,y):g.moveTo(x,y); });
+  g.stroke();
+  g.fillStyle='#3ef2a0';
+  const lx=w, ly=yOf(vals[vals.length-1]);
+  g.beginPath(); g.arc(lx-3,ly,3,0,7); g.fill();
+}
+
+/* ── WHERE YOU LOSE IT ────────────────────────────────────────────────────────
+   The one thing this can tell a golfer that nothing else can. Every crack they have
+   ever had, plotted against the ball rather than against the clock, so a pattern
+   across many swings becomes visible in a way it never is inside one swing.
+
+   On Brixton's own 1:21 swing all four cracks landed inside the last second before
+   impact, and the first was a 260 ms breath hold 0.28 s BEFORE the takeaway. That is
+   a personal, timestamped diagnosis - and it is the reason to come back.            */
+function tensionPlot(rows){
+  const c=document.getElementById('tension');
+  const d=devicePixelRatio||1, r=c.getBoundingClientRect();
+  c.width=r.width*d; c.height=r.height*d;
+  const g=c.getContext('2d'); g.setTransform(d,0,0,d,0,0);
+  const w=r.width,h=r.height; g.clearRect(0,0,w,h);
+  const txt=document.getElementById('tensionText');
+
+  const all=[];
+  rows.forEach(x=>{ if(Array.isArray(x.crack_rel)) x.crack_rel.forEach(v=>all.push(v)); });
+  if(all.length<3){ txt.textContent='Needs a few swing hums with the ball in them.'; return; }
+
+  const LO=-2.5, HI=1.5;                       // 2.5s before the ball to 1.5s after
+  const xOf=t=>28+((Math.max(LO,Math.min(HI,t))-LO)/(HI-LO))*(w-36);
+  // the ball
+  const bx=xOf(0);
+  g.fillStyle='rgba(127,212,255,.10)'; g.fillRect(bx-1,0,2,h-18);
+  g.strokeStyle='#7fd4ff'; g.lineWidth=1.5; g.setLineDash([4,4]);
+  g.beginPath(); g.moveTo(bx,0); g.lineTo(bx,h-18); g.stroke(); g.setLineDash([]);
+  g.fillStyle='#7fd4ff'; g.font='700 10px -apple-system,system-ui,sans-serif';
+  g.fillText('THE BALL', bx+5, 11);
+  // histogram of cracks
+  const NB=24, bins=new Array(NB).fill(0);
+  all.forEach(t=>{ const k=Math.floor(((Math.max(LO,Math.min(HI,t))-LO)/(HI-LO))*(NB-1e-9));
+                   bins[Math.max(0,Math.min(NB-1,k))]++; });
+  const mx=Math.max(...bins,1), bw=(w-36)/NB;
+  bins.forEach((v,i)=>{ if(!v) return;
+    const bh=(v/mx)*(h-34);
+    g.fillStyle='rgba(255,107,107,.75)';
+    g.fillRect(28+i*bw+1, h-18-bh, bw-2, bh); });
+  g.strokeStyle='#1b2735'; g.beginPath(); g.moveTo(28,h-18); g.lineTo(w,h-18); g.stroke();
+  g.fillStyle='#8ea3bd'; g.font='9px -apple-system,system-ui,sans-serif';
+  g.fillText('2.5s before',30,h-6); g.fillText('after',w-32,h-6);
+
+  const before=all.filter(t=>t<0), med=[...all].sort((a,b)=>a-b)[all.length>>1];
+  const pct=Math.round(before.length/all.length*100);
+  txt.innerHTML = pct>=65
+    ? '<b>'+pct+'% of your cracks land before the ball</b> — typically '
+      + Math.abs(med).toFixed(1) + 's before it. That is your tension point.'
+    : pct<=35
+    ? '<b>'+(100-pct)+'% of your cracks land after the ball.</b> You hold it into the strike and let go after.'
+    : '<b>Your cracks are spread either side of the ball.</b> No single tension point yet.';
+}
+
+function scatter(rows){
+  const c=document.getElementById('scatter');
+  const d=devicePixelRatio||1, r=c.getBoundingClientRect();
+  c.width=r.width*d; c.height=r.height*d;
+  const g=c.getContext('2d'); g.setTransform(d,0,0,d,0,0);
+  const w=r.width,h=r.height; g.clearRect(0,0,w,h);
+  const txt=document.getElementById('corrText');
+  if(rows.length<5){ txt.textContent='Rate '+(5-rows.length)+' more strikes and this fills in.'; return; }
+  g.strokeStyle='#1b2735'; g.strokeRect(28,4,w-34,h-24);
+  rows.forEach(p=>{
+    const x=28+(p.score/100)*(w-34), y=h-20-(p.strike/10)*(h-24);
+    g.fillStyle='rgba(62,242,160,.75)'; g.beginPath(); g.arc(x,y,3.5,0,7); g.fill();
+  });
+  g.fillStyle='#8ea3bd'; g.font='9px -apple-system,system-ui,sans-serif';
+  g.fillText('strike 10',2,10); g.fillText('0',20,h-18); g.fillText('hum score →',w-70,h-4);
+  // Pearson r. Reported with the n, and hedged below 15 pairs, because a correlation
+  // off six shots is a coin flip with a decimal point.
+  const xs=rows.map(p=>p.score), ys=rows.map(p=>p.strike);
+  const mx=xs.reduce((a,b)=>a+b,0)/xs.length, my=ys.reduce((a,b)=>a+b,0)/ys.length;
+  let num=0,dx=0,dy=0;
+  xs.forEach((x,i)=>{ num+=(x-mx)*(ys[i]-my); dx+=(x-mx)**2; dy+=(ys[i]-my)**2; });
+  const rr = (dx&&dy) ? num/Math.sqrt(dx*dy) : 0;
+  txt.innerHTML = rows.length<15
+    ? '<b>r = '+rr.toFixed(2)+'</b> over '+rows.length+' shots — too few to trust yet. Keep rating.'
+    : (rr>0.3 ? '<b>r = '+rr.toFixed(2)+'</b> over '+rows.length+' shots. Your better hums go with your better strikes.'
+      : rr<-0.3 ? '<b>r = '+rr.toFixed(2)+'</b> over '+rows.length+' shots — the opposite of expected.'
+      : '<b>r = '+rr.toFixed(2)+'</b> over '+rows.length+' shots. No clear link yet on your swings.');
+}
+
+/* ── EVERYONE ─────────────────────────────────────────────────────────────── */
+async function paintAll(){
+  const {rows, local} = await Store.everyone();
+  document.getElementById('allNote').textContent = local
+    ? 'No server connected yet, so this is only the hums recorded on this device.'
+    : rows.length + ' hums from ' + new Set(rows.map(r=>r.player_id)).size + ' golfers.';
+  document.getElementById('allN').textContent = rows.length;
+  document.getElementById('allAvg').textContent = rows.length
+    ? (rows.reduce((s,r)=>s+r.score,0)/rows.length).toFixed(0) : '—';
+
+  const by={};
+  rows.forEach(r=>{ (by[r.player_id] = by[r.player_id] || []).push(r); });
+  const players = Object.entries(by).map(([id,rs])=>{
+    rs.sort((a,b)=> a.at<b.at?-1:1);
+    const first=rs.slice(0,3), last=rs.slice(-3);
+    const avg=a=>a.reduce((s,r)=>s+r.score,0)/a.length;
+    return { id, name: (rs.find(r=>r.name)||{}).name || 'Unnamed golfer',
+             best: Math.max(...rs.map(r=>r.score)), n: rs.length,
+             gain: rs.length>=6 ? avg(last)-avg(first) : null };
+  });
+
+  const tb=document.getElementById('allRows'); tb.innerHTML='';
+  players.sort((a,b)=>b.best-a.best).slice(0,20).forEach((p,i)=>{
+    const tr=document.createElement('tr'); if(p.id===ME) tr.className='me';
+    tr.innerHTML='<td>'+(i+1)+'</td><td>'+esc(p.name)+(p.id===ME?' <span class="pill" style="background:#12362a;color:#3ef2a0">you</span>':'')+
+      '</td><td><b>'+p.best.toFixed(0)+'</b></td><td>'+p.n+'</td>';
+    tb.appendChild(tr);
+  });
+  if(!players.length) tb.innerHTML='<tr><td colspan="4" class="hint">No hums yet.</td></tr>';
+
+  const ib=document.getElementById('impRows'); ib.innerHTML='';
+  const imp=players.filter(p=>p.gain!=null).sort((a,b)=>b.gain-a.gain).slice(0,10);
+  imp.forEach((p,i)=>{
+    const tr=document.createElement('tr'); if(p.id===ME) tr.className='me';
+    tr.innerHTML='<td>'+(i+1)+'</td><td>'+esc(p.name)+'</td><td style="color:'+
+      (p.gain>=0?'var(--go)':'var(--bad)')+'"><b>'+(p.gain>=0?'+':'')+p.gain.toFixed(1)+'</b></td>';
+    ib.appendChild(tr);
+  });
+  if(!imp.length) ib.innerHTML='<tr><td colspan="3" class="hint">Needs 6 hums from someone.</td></tr>';
+  // only once they are actually on the board
+  const ask=document.getElementById('nameAsk');
+  if(ask) ask.style.display = (!NAME && Store.mine().length) ? '' : 'none';
+}
+function esc(s){ return String(s).replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   THE SHARE CARD — "You vs Brixton"
+
+   The design question was whether to put their SCORE on a card. It isn't enough:
+   "I got 78" is meaningless to someone who has never used this, so it dies in the
+   feed. What travels is a picture that is legible in one second to a stranger AND
+   invites a response.
+
+   Two things make that work here:
+     1. THE LINE, not the number. A jagged pitch trace with the ball marked reads
+        like a lie detector for a golf swing. Flat = good, broken = bad, no caption
+        needed. Nobody has seen a golf graphic like it, which is most of the job.
+     2. A BENCHMARK. Brixton's own 99 straight line is drawn underneath theirs, so
+        every card is a head-to-head. That is the "beat the pro" mechanic - the most
+        reliable viral format in golf - and it means every share carries his line and
+        his name rather than just a handle someone has to go and search.
+
+   Beating him is postable. Getting crushed by him is postable. Both point back at
+   him, and both give him something to repost.                                      */
+const BRIXTON_LINE = {"note": 138.8, "cents": [155.3, 53.0, 75.6, 33.1, 17.5, 3.2, 5.7, 2.6, -12.2, -11.1, -25.4, -13.6, -9.9, -18.3, -9.4, -7.5, -21.2, -2.4, -1.9, -5.4, -16.5, -13.6, -20.3, -10.2, -8.7, -11.6, -9.2, -4.2, -1.0, 6.1, 2.8, -4.9, -15.3, -14.3, -17.8, -2.8, 13.9, 0.4, -4.2, 2.8, -0.0, 4.8, 5.6, -3.5, -5.8, -13.8, -12.7, -6.6, 12.2, 2.3, 0.4, -1.4, -3.2, -8.4, 5.5, 0.8, 5.1, 10.3, 9.0, 13.0, 11.7, -2.5, -8.3, -7.4, -4.0, 5.2, -1.2, 3.3, 6.2, 0.1, 4.2, 1.5, -2.3, -1.3, -2.3, 1.8, 10.0, 5.0, -9.2, -5.0, -10.3, 0.7, 2.5, -1.8, -1.0, -9.2, -9.7, -15.2, -12.4, -6.6, -9.8, -17.7, 11.2, 21.9, 9.7, 16.0, 13.6, 23.2, 22.3, 11.6, 19.3, 11.8, 5.7, 8.7, 8.3, 10.7, 10.4, 8.1, 7.8, 1.8, -16.6, -8.4, 7.8, 2.5, 9.3, 4.4, -2.6, -2.3, 2.0, 11.6, -9.7, -12.0, -6.2, -7.3, 7.0, 27.0]};
+
+function drawShareCard(s){
+  const c=document.getElementById('card'); if(!c) return;
+  const W=1080, H=1350; c.width=W; c.height=H;
+  const g=c.getContext('2d');
+  const F=(w,sz)=>`${w} ${sz}px -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif`;
+
+  g.fillStyle='#0b0f14'; g.fillRect(0,0,W,H);
+  g.textAlign='left';
+  g.fillStyle='#5d7186'; g.font=F(800,30);
+  g.fillText('T H E   H U M   M E T E R', 70, 92);
+
+  // ── their score ──
+  const band = s.total>=85?['ELITE','#3ef2a0']:s.total>=70?['CLEAN','#7fd4ff']
+             : s.total>=60?['SHAKY','#ffc857']:['NEEDS WORK','#ff6b6b'];
+  g.fillStyle=band[1]; g.font=F(800,210);
+  g.fillText(String(Math.round(s.total)), 70, 290);
+  const wsc=g.measureText(String(Math.round(s.total))).width;
+  g.font=F(800,34); g.fillText(band[0], 70+wsc+26, 290);
+
+  // ── the two lines ──
+  const PX=70, PW=W-140, LH=300, GAP=54;
+  function trace(cents, y, colour, label, sub, lw){
+    g.fillStyle='#121a24'; g.fillRect(PX,y,PW,LH);
+    g.strokeStyle='#1c2836'; g.lineWidth=2; g.strokeRect(PX,y,PW,LH);
+    // a fixed +/-350c window on BOTH panels, or the comparison is a lie
+    const V=350, yOf=cv=>y+LH/2-(Math.max(-V,Math.min(V,cv))/V)*(LH/2-18);
+    g.strokeStyle='#1a2532'; g.lineWidth=1;
+    [-200,-100,0,100,200].forEach(cv=>{ const yy=yOf(cv);
+      g.beginPath(); g.moveTo(PX,yy); g.lineTo(PX+PW,yy); g.stroke(); });
+    g.strokeStyle=colour; g.lineWidth=lw; g.lineJoin='miter'; g.lineCap='butt';
     let pen=false; g.beginPath();
-    frames.forEach((f,i)=>{
-      const x = px + i/(Math.max(frames.length,1)-1)*pw;
-      if(!f.hz){ pen=false; return; }
-      // Not clamped: a crack that leaps an octave has to LOOK like it did.
-      const y = py + ph/2 - (1200*Math.log2(f.hz/med))/SPAN*(ph/2);
-      if(!pen){ g.moveTo(x,y); pen=true; } else g.lineTo(x,y);
-    });
+    cents.forEach((cv,i)=>{ const x=PX+ (i/(cents.length-1))*PW;
+      if(cv===null||cv===undefined){pen=false;return;}
+      const yy=yOf(cv); pen?g.lineTo(x,yy):g.moveTo(x,yy); pen=true; });
     g.stroke();
-    g.fillStyle = css('--bad');
-    (s.cracks||[]).forEach(c=>{
-      const fi = Math.round(c.at*1000/HOP) + (s.humStart||0);
-      const x = px + fi/(Math.max(frames.length,1)-1)*pw;
-      g.beginPath(); g.arc(x, py+ph/2, 11, 0, 7); g.fill(); });
+    g.fillStyle='#f2f6fb'; g.font=F(800,30); g.fillText(label, PX+22, y+44);
+    if(sub){ g.fillStyle='#7e93aa'; g.font=F(600,25); g.fillText(sub, PX+22, y+80); }
   }
 
-  g.fillStyle='#8ea3bd'; g.font='500 34px -apple-system,Inter,system-ui,sans-serif';
-  g.fillText(s.note.toFixed(0)+' Hz   ·   ±'+s.jitter.toFixed(0)+' cents   ·   '
-    + (s.cracks.length ? s.cracks.length + ' crack' + (s.cracks.length>1?'s':'')
-       : s.tension.length ? s.tension.length + ' stop' + (s.tension.length>1?'s':'')
-                        : Math.round(s.onAir) + '% on the note'),
-    W/2, py+ph+80);
+  // theirs
+  const fr=H_.getFrames(), v=fr.filter(f=>f.hz);
+  const med=v.length?H_.median(v.map(f=>f.hz)):130;
+  const mine=fr.map(f=>{const hz=f.drawHz!==undefined?f.drawHz:f.hz;
+    return hz?1200*Math.log2(hz/med):null;});
+  trace(mine, 360, band[1], 'YOU', Math.round(s.total)+' · '+band[0], 3.4);
 
-  g.fillStyle='#f2f6fb'; g.font='700 40px -apple-system,Inter,system-ui,sans-serif';
-  // A screenshot is the most-travelled version of this page, and it has to be
-  // self-serving: a handle makes someone go and search, a URL is a straight path.
-  g.fillText('Score your hum  ·  @brixton_pg', W/2, H-140);
-  g.fillStyle='#3ef2a0'; g.font='600 34px -apple-system,Inter,system-ui,sans-serif';
-  g.fillText('brixton-collab.github.io/hum-meter', W/2, H-78);
+  // the ball + the cracks, on their panel only
+  const yTop=360, V=350;
+  if(s.impact){
+    const x=PX+((s.impact.frame+(s.humStart||0))/Math.max(fr.length-1,1))*PW;
+    g.strokeStyle='#7fd4ff'; g.lineWidth=3; g.setLineDash([10,8]);
+    g.beginPath(); g.moveTo(x,yTop); g.lineTo(x,yTop+LH); g.stroke(); g.setLineDash([]);
+    g.fillStyle='#7fd4ff'; g.font=F(800,24); g.fillText('THE BALL', x+12, yTop+LH-18);
+  }
+  (s.cracks||[]).forEach(cr=>{
+    const fi=Math.round(cr.at*1000/H_.HOP)+(s.humStart||0);
+    const x=PX+(fi/Math.max(fr.length-1,1))*PW;
+    g.strokeStyle='#ff6b6b'; g.lineWidth=3;
+    g.beginPath(); g.moveTo(x,yTop); g.lineTo(x,yTop+LH); g.stroke();
+    g.fillStyle='#ff6b6b'; g.beginPath();
+    g.moveTo(x-13,yTop+2); g.lineTo(x+13,yTop+2); g.lineTo(x,yTop+26); g.fill();
+  });
+
+  // his
+  trace(BRIXTON_LINE.cents, 360+LH+GAP, '#3ef2a0', 'BRIXTON', '99 · ELITE', 3.0);
+
+  // ── the verdict, one line ──
+  const y2=360+LH*2+GAP+78;
+  g.fillStyle='#e6eef7'; g.font=F(700,40);
+  const beat = s.total >= 99;
+  const line = beat ? 'Beat him.'
+    : (s.cracks && s.cracks.length) ? 'Cracked ' + (s.cracks.length===1?'once':s.cracks.length+' times') + '.'
+    : (s.through && !s.through.survived) ? 'Lost it at the ball.'
+    : 'Held it the whole way.';
+  g.fillText(line, PX, y2);
+
+  // ── the ask + the path ──
+  g.fillStyle='#3ef2a0'; g.font=F(800,42);
+  g.fillText('Can you hold a steadier line?', PX, y2+72);
+  g.fillStyle='#7e93aa'; g.font=F(600,32);
+  g.fillText('@brixton_pg   ·   score your own — link in bio', PX, y2+126);
 }
 
-// Tap to start, tap to stop — not press-and-hold. Holding a button down for five
-// seconds while also humming is awkward on a phone and worse on a laptop, and the
-// meter is used exactly once by most people: the interaction has to be obvious on the
-// first try or the score never happens.
-const go = document.getElementById('go');
-go.addEventListener('click', ev => { ev.preventDefault(); running ? stop() : start(); });
-fit();
+const _shareBtn = document.getElementById('shareBtn');
+if(_shareBtn) _shareBtn.onclick = async () => {
+  const url='https://brixton-collab.github.io/hum-meter/board.html';
+  const c=document.getElementById('card');
+  const sc=document.getElementById('sc').textContent;
+  const txt='Scored '+sc+' on the Hum Meter. See if you can hold a steadier line.';
+  const b=document.getElementById('shareBtn');
+  // Share the IMAGE where the browser allows it - a picture travels, a link does not.
+  try{
+    const blob = await new Promise(r=>c.toBlob(r,'image/png'));
+    const file = new File([blob],'hum.png',{type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], text:txt, url}); return;
+    }
+    if(navigator.share){ await navigator.share({text:txt, url}); return; }
+  }catch(e){}
+  try{ await navigator.clipboard.writeText(txt+' '+url);
+       b.textContent='Copied — now screenshot the card'; }catch(e){}
+  setTimeout(()=>{ b.textContent='Share this'; },2600);
+};
+
+document.getElementById('addName').onclick = () => {
+  const n = prompt('What should the board call you?', '');
+  if(n===null) return;
+  NAME = n.trim().slice(0,24); localStorage.setItem(NMK, NAME);
+  renderWho(); Store.renameAll(NAME); paintMe(); paintAll();
+};
+
+/* ── NAV ──────────────────────────────────────────────────────────────────── */
+document.querySelectorAll('nav button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('v-'+b.dataset.v).classList.add('on');
+    if(b.dataset.v==='me') paintMe();
+    if(b.dataset.v==='all') paintAll();
+  };
+});
+
+/* first run, once */
+if(!localStorage.getItem('humSeenIntro')){
+  document.getElementById('firstrun').style.display='';
+}
+document.getElementById('firstok').onclick=()=>{
+  localStorage.setItem('humSeenIntro','1');
+  document.getElementById('firstrun').style.display='none';
+};
+
+showBlocker();          // must run before anything invites them to tap
+renderWho(); fit(); draw(); paintMe(); paintAll();
 </script>
+</body></html>

@@ -239,7 +239,18 @@ function isolate(fr){
   if((end-start)*HOP < ISO_MIN_MS) return [0, fr.length];
   return [start, end+1];
 }
-function score(rumble, level){
+/* THE ROAD IS NOT PART OF HIS HUM'S LOUDNESS.
+   `noiseFloor` is the level of the background measured BEFORE he started humming - pure
+   road, wind and mic. Every level test below asks "did his hum drop away", and a constant
+   additive floor makes the answer no: measured, REF3 - the hum he graded "lost" - drops to
+   17% of its own median when clean and stops registering as a drop at all next to a road,
+   so its 5 cracks become 0 and its score RISES 61 -> 78. Noise flattering a bad hum is the
+   more dangerous half of the noise problem, because nobody ever complains about it.
+   Subtracting the floor restores the depth of the collapse without touching a clean hum,
+   where the floor is ~0 and every number below is unchanged. */
+function score(rumble, level, noiseFloor){
+  const NF = (noiseFloor>0) ? noiseFloor : 0;
+  const lvlAt = i => { const v = level && level[i]; return v==null ? null : Math.max(0, v-NF); };
   const [i0,i1] = isolate(frames);
   const hum = frames.slice(i0,i1);
   /* ⚠️ THE SPAN MUST START AT A REAL HUM, NOT AT THE FIRST FRAME THAT READS AS PITCH.
@@ -289,14 +300,14 @@ function score(rumble, level){
   };
   const bodyLvl = (()=>{
     if(!level || !level.length) return null;
-    const v=[]; for(let i=0;i<hum.length;i++){ const q=level[i0+i]; if(q!=null && hum[i].hz) v.push(q); }
+    const v=[]; for(let i=0;i<hum.length;i++){ const q=lvlAt(i0+i); if(q!=null && hum[i].hz) v.push(q); }
     return v.length>=10 ? median(v)*0.45 : null;
   })();
   const upAt = (dir) => {
     const idx = dir>0 ? hum.map((_,i)=>i) : hum.map((_,i)=>hum.length-1-i);
     let run=0;
     for(const i of idx){
-      const loud = bodyLvl==null || (level[i0+i]!=null && level[i0+i] >= bodyLvl);
+      const loud = bodyLvl==null || (lvlAt(i0+i)!=null && lvlAt(i0+i) >= bodyLvl);
       if(hum[i].hz && loud){ run++; if(run>=ONSET) return dir>0 ? i-run+1 : i+run-1; }
       else run=0;
     }
@@ -467,12 +478,12 @@ function score(rumble, level){
         if(!level || !level.length) return true;              // no level data - old behaviour
         const base = i0 + first;
         const voicedLv = [], gapLv = [];
-        for(let k=0;k<span.length;k++){ const v = level[base+k];
+        for(let k=0;k<span.length;k++){ const v = lvlAt(base+k);
           if(v==null) continue; (voiced[k] ? voicedLv : gapLv).push(v); }
         if(voicedLv.length < 5) return true;
         const ref = median(voicedLv);
         let sum=0, n=0;
-        for(let k=i;k<j;k++){ const v = level[base+k]; if(v!=null){ sum+=v; n++; } }
+        for(let k=i;k<j;k++){ const v = lvlAt(base+k); if(v!=null){ sum+=v; n++; } }
         if(!n) return true;
         return (sum/n) < ref*0.5;                             // band went quiet => a real break
       })();
@@ -532,13 +543,13 @@ function score(rumble, level){
      event as losing it at the ball, which is the thing the meter is FOR.               */
   if(level && level.length){
     const base = i0 + first;
-    const lv = []; for(let i=0;i<span.length;i++){ const v=level[base+i]; if(v!=null && voiced[i]) lv.push(v); }
+    const lv = []; for(let i=0;i<span.length;i++){ const v=lvlAt(base+i); if(v!=null && voiced[i]) lv.push(v); }
     if(lv.length >= 10){
       const ref = median(lv), floor = ref*0.30, need = Math.round(150/HOP);
       for(let i=0;i<span.length;){
-        const v = level[base+i];
+        const v = lvlAt(base+i);
         if(v == null || v >= floor){ i++; continue; }
-        let j=i; while(j<span.length && level[base+j]!=null && level[base+j]<floor) j++;
+        let j=i; while(j<span.length && lvlAt(base+j)!=null && lvlAt(base+j)<floor) j++;
         /* ⚠️ A BREAK HAS HUM ON BOTH SIDES OF IT. Every hum tapers at the end, and the
            first version of this charged that taper as a break - his PERFECT2, which he
            graded ~100, dropped to 74 for the way it finished. A fade is only a break if
@@ -546,7 +557,7 @@ function score(rumble, level){
            hear me hum, then I hit the ball (lose the hum), then hum picks back". So
            require the hum to come back loud enough, after the quiet patch, to prove it
            was a break in the middle and not the ending. */
-        const after = level.slice(base+j, base+j+need*2).filter(v=>v!=null && v>=ref*0.6);
+        const after = []; for(let k=base+j;k<base+j+need*2;k++){ const q=lvlAt(k); if(q!=null && q>=ref*0.6) after.push(q); }
         const cameBack = after.length >= Math.min(need, 3);
         if(cameBack && (j-i) >= need && i>=headGuard && i<guard &&
            !cracks.some(c=>{ const a2=Math.round(c.at*1000/HOP); return a2<j && a2+Math.round(c.ms/HOP)>i; }))

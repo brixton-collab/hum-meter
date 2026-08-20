@@ -78,14 +78,13 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
     <div class="card" id="firstrun" style="display:none;border-color:#1e4436;background:#101c18">
       <b style="font-size:15px">Hum through your swing. See where it breaks.</b>
       <ol class="how">
-<!-- ⚠️ DO NOT PUT THE PHONE BACK ON THE GROUND. Flat on the turf is what produces the
-     octave failure: the ground returns the voice about three feet late, which is near half
-     the pitch period, and autocorrelation then answers an octave low. 11 of the first 56
-     hums in the database were graded on that phantom note and NOT ONE cleared 65.3. The
-     page was teaching people into the bug. Leaning it up removes the reflection. -->
-        <li>Lean your phone up against your bag or a club, <b>screen facing you</b> — not flat on the ground.</li>
-        <li><b>Tap start and make a swing.</b> Hold one steady hum the whole shot —
-            backswing, strike and finish. Don’t stop when you hit it.</li>
+<!-- ⚠️ HE OVERRULED THE "LEAN IT UP" WORDING 2026-08-20 - on the ground is how it is
+     actually used and the copy has to match that. The octave failure the ground causes is
+     now CAUGHT by registerGuard() rather than prevented by the instructions: a ground
+     bounce gets refused with a re-take prompt instead of a wrong low score. -->
+        <li>Put your phone on the ground next to your ball, <b>screen up</b>.</li>
+        <li><b>Tap start and make a swing.</b> Hold one hum through the ball —
+            don’t stop when you hit it.</li>
         <li><b>Pick your phone up</b> and see your score. It stops on its own.</li>
       </ol>
       <div class="hint" style="border-top:1px solid #1e4436;padding-top:10px;margin-top:4px">
@@ -882,7 +881,7 @@ function showOctave(g){
   document.getElementById('blocker').innerHTML =
     '<div class="warnbox"><b>\u26a0\ufe0f Couldn\u2019t read your note \u2014 hum that one again</b>' +
     why + ', so any score would be wrong. ' +
-    'Stand the phone up against something instead of flat on the ground, or come a step closer, and go again.' +
+    'Take a step closer to the phone, or tilt it up on your bag, and go again.' +
     ' <span class="hint">(I\u2019d rather give you nothing than give you a wrong number.)</span></div>';
   document.getElementById('res').style.display='none';
 }
@@ -1400,7 +1399,7 @@ function drawShareCard(s){
   g.fillStyle='#3ef2a0'; g.font=F(800,42);
   g.fillText('Can you hold a steadier line?', PX, y2+72);
   g.fillStyle='#7e93aa'; g.font=F(600,32);
-  g.fillText('brixton-collab.github.io/hum-meter   ·   @brixton_pg', PX, y2+126);
+  g.fillText('@brixton_pg   ·   score your own — link in bio', PX, y2+126);
 }
 
 const _shareBtn = document.getElementById('shareBtn');
