@@ -27,6 +27,38 @@ function pipeline(pcm, sr){
     let e=0; for(let k=i;k<i+W;k++) e+=band[k]*band[k];
     lvl.push(Math.sqrt(e/W));
   }
+  /* ── THE HARMONIC-LOCKED TIGHT BAND ───────────────────────────────────────────
+     The band the detector listens through is fixed at 90-300 Hz, which is all that can be
+     chosen before the note is known. Once a LONG-window harmonic sum has found the note -
+     robustly, because a harmonic stack survives what buries a fundamental - the band can
+     be centred on it, and that is what lifts the share of frames that land on his note.
+     Measured earlier on his own hums at distance: 36% -> 53%.
+     Locking to the WRONG note is catastrophic (it removes the hum instead of finding it),
+     so this is only adopted when the tight track is more SELF-CONSISTENT than the wide
+     one - a track that found the hum clusters around its own median, because a hum is one
+     note. Same discipline as the live retune that had to be removed. */
+  if(process.env.TIGHT){
+    const {harmonicNote}=require('./harmonic.js');
+    const LONG=8192, hs=[];
+    for(let i=0;i+LONG<=pcm.length;i+=Math.round(sr*0.16)){
+      const r=harmonicNote(pcm.subarray(i,i+LONG),sr,LONG); if(r) hs.push(r.hz);
+    }
+    if(hs.length>=3){
+      const seed=hs.slice().sort((x,y)=>x-y)[hs.length>>1];
+      const fold=h=>{while(h>seed*1.5)h/=2; while(h<seed*0.67)h*=2; return h;};
+      const hf=hs.map(fold).sort((x,y)=>x-y); const hnote=hf[hf.length>>1];
+      const tb=P.tightBand(pcm,sr,hnote); const t2=[];
+      for(let i=0;i+W<=tb.length;i+=step){
+        const d=H.detect(Float32Array.from(tb.subarray(i,i+W)),sr,H.SR_MIN,H.CLARITY_FILTERED);
+        t2.push({hz:d?d.hz:0, clarity:d?d.clarity:0});
+      }
+      const coh=t=>{ const v=t.filter(f=>f.hz).map(f=>f.hz); if(v.length<10) return 0;
+        const m=v.slice().sort((x,y)=>x-y)[v.length>>1];
+        const ag=v.filter(h=>Math.abs(1200*Math.log2(h/m))<200).length/v.length;
+        return (v.length/t.length)*ag*ag; };
+      if(coh(t2) > coh(fr)) for(let i=0;i<fr.length;i++){ fr[i]=t2[Math.min(i,t2.length-1)]; }
+    }
+  }
   const live=fr.map(f=>f.hz);
   try{
     const re=P.retrack(pcm,sr,H.HOP,W);
@@ -92,10 +124,60 @@ function pipeline(pcm, sr){
      it too, because his real breaks are short. But a hum stopping at the ball produces NO
      PITCH - not an off-note one - so this rule leaves it fully charged, which is the whole
      requirement. SWING121 is the test that killed the others; it should be untouched. */
+  /* ── THE HARMONIC-STACK DISCRIMINATOR ─────────────────────────────────────────
+     For every frame we could not track, ask the one question the pitch track cannot
+     answer: IS HIS HARMONIC STACK STILL IN THE AIR?
+
+       stack present -> he is still humming and we lost him. Ours. Not scored, not a crack.
+       stack absent  -> he is not humming. His. Counted, and a crack if it runs.
+
+     Measured separation on his real six-foot recording: the stack is present in 83% of
+     frames we tracked and 44% of frames we lost. It is INDEPENDENT of the pitch track,
+     which is why it can answer what pitch-track statistics could not - his six-foot noise
+     and a swing hum coming apart are indistinguishable there (48% vs 56% off-note, 713c
+     vs 634c). And a golf strike is broadband with no stack at his note, so a hum stopping
+     at the ball reads correctly as HIS - which is where band energy failed. */
+  let excused = new Array(F.length).fill(false);
+  if(process.env.STACK && ref){
+    const {spectrum, magAt} = require('./harmonic.js');
+    const MID=2048, st=Math.round(sr*H.HOP/1000);
+    for(let i=0;i<F.length;i++){
+      /* ⚠️ Also excusing MIS-TRACKED VOICED frames (stack present but our pitch reading
+         disagrees) was tried and reverted: SWING23 went to 94 and SWING121 to 83 against
+         his "60s ish", while his six-foot case moved 0.2 points. During a swing hum's
+         breakup the stack is often still present while the pitch genuinely wanders, so
+         the rule excused the breakdown. Only frames with NO pitch are excused. */
+      if(F[i].hz) continue;
+      const s0=(a+i)*st - (MID>>1);
+      if(s0<0 || s0+MID>pcm.length) continue;
+      const mag=spectrum(pcm.subarray(s0,s0+MID), MID), binHz=sr/MID;
+      let peak=0; for(let k=1;k<mag.length;k++) if(mag[k]>peak) peak=mag[k];
+      let hits=0;
+      for(let h=1;h<=6;h++){
+        const fh=ref*h; if(fh/binHz>=mag.length-2) break;
+        const m=magAt(mag,fh,binHz);
+        let nb=0,nn=0;
+        for(let d=3;d<=9;d++){ const l=Math.round(fh/binHz)-d, r=Math.round(fh/binHz)+d;
+          if(l>0){nb+=mag[l];nn++;} if(r<mag.length){nb+=mag[r];nn++;} }
+        if(m>peak/40 && m>(nn?nb/nn:0)*1.8) hits++;
+      }
+      if(hits>=2) excused[i]=true;                // his hum is audibly still there
+    }
+  }
+  global.__excused = excused;
   if(process.env.NOISEGAP) global.__noiseFrames = noiseFrame;
   F.forEach(f=>f.drawHz=f.hz);
   H.deHash();
   const sc = H.score(null, L);
+  if(process.env.STACK && sc){
+    const ex = global.__excused.filter(Boolean).length;
+    const kept = F.length - ex;
+    if(kept > 0 && ex > 0){
+      const scale = F.length/kept;
+      sc.total = Math.round(Math.min(100, sc.total*scale)*10)/10;
+      sc.excused = ex;
+    }
+  }
   if(process.env.NOISEGAP && sc && global.__noiseFrames){
     /* re-derive total with the room's frames out of the denominator */
     const nf = global.__noiseFrames;
@@ -115,6 +197,7 @@ const CASES=[
   ['SWING63', 'NTP-swing63.wav',     'he said "~63"',                 50, 75],
   ['SWING121','NTP-swing121.wav',    'he said "60s ish"',             50, 75],
   ['REAL-6FT','real-outside-6ft.wav','he said these should be 80s',   78,100],
+  ['FAR-6FT', 'far-hum-6ft.wav',     'the one that read 58; wants 80s',78,100],
 ];
 let pass=0, fail=0;
 console.log('\n── his recordings, through the real pipeline, against what HE said ──\n');

@@ -211,6 +211,23 @@ function isolate(fr){
     if(b-a<=1){ end=b; continue; }
     const nxt = fr.slice(b, b+look);
     const on  = nxt.filter(f=>f.hz);
+    /* ⚠️ ISOLATE ENDS THE HUM AT THE FIRST SUSTAINED OFF-NOTE PATCH, AND THAT IS A REAL
+       BUG - the off-note patch is the event the meter exists to measure. Measured on
+       SWING121: the voiced track runs essentially unbroken across all 6.2s and isolate
+       keeps 0.0-2.7s of it, so the scorer sees the clean opening and never the part that
+       comes apart. The truncated version scores 82; he graded the clip "60s ish".
+
+       THE FIX IS WRITTEN AND MEASURED AND IS *NOT* APPLIED, because it trades one wrong
+       answer for another and I could not tell which is right without asking him:
+           SWING121  82.1 -> 72.9   (into his band - correct)
+           SWING63   61.6 -> 43.4   (out of his band - wrong)
+       Dropping the on-note test admits the whole of SWING63, whose full nine seconds
+       score ~45 raw. Either the scorer is far too harsh on a swing hum's messy half, or
+       HIS GRADES FOR THE SWING CLIPS DESCRIBE THE TRUNCATED GRAPH THE APP SHOWED HIM AT
+       THE TIME - in which case the bands are wrong, not the fix. That question has to be
+       asked before this ships. Restore by replacing the two lines below with:
+           const resumes = on.length>=5 && (on.length/Math.max(1,nxt.length)) >= ISO_ON_FRAC;
+           if(b-a<=maxGap && resumes){ end=b; continue; }                                */
     const resumesOnNote = on.length>=5 && median(on.slice(0,60).map(f=>off(f.hz))) <= ISO_NEAR_C;
     const stays = nxt.length && (nxt.filter(f=>f.hz && off(f.hz)<=200).length/nxt.length) >= ISO_ON_FRAC;
     if(b-a<=maxGap && resumesOnNote && stays){ end=b; continue; }
