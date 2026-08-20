@@ -914,9 +914,27 @@ function isolate(fr){
     if(b-a<=1){ end=b; continue; }
     const nxt = fr.slice(b, b+look);
     const on  = nxt.filter(f=>f.hz);
-    const resumesOnNote = on.length>=5 && median(on.slice(0,60).map(f=>off(f.hz))) <= ISO_NEAR_C;
-    const stays = nxt.length && (nxt.filter(f=>f.hz && off(f.hz)<=200).length/nxt.length) >= ISO_ON_FRAC;
-    if(b-a<=maxGap && resumesOnNote && stays){ end=b; continue; }
+    /* ⚠️ THE HUM ENDS AT SILENCE, NOT AT AN OFF-NOTE PATCH.
+
+       This used to require the audio after a gap to resume ON HIS NOTE and gave up if it
+       did not - so it ended the hum at the first sustained off-note excursion, which is
+       the event this meter exists to measure. Measured on SWING121: the voiced track runs
+       essentially unbroken across all 6.2 s and isolate kept 0.0-2.7s. The scorer was
+       handed the clean opening and never saw the part that comes apart.
+
+       HOW IT WAS CONFIRMED, because the scores alone were ambiguous. Fixing it moved
+       SWING121 82 -> 73 (right) and SWING63 62 -> 43 (apparently wrong against his
+       recorded grade of "~63"). So he was sent the raw audio and asked to listen to the
+       whole clip, and he re-graded it: "swing63 I'd grade in the 50s BECAUSE I LOST IT AT
+       IMPACT."
+
+       His original 63 had been given while looking at the graph the app drew - a graph
+       that had already thrown away the half where he lost it. The truncation was hiding
+       the very thing he grades on, and it was hiding it from him as well as from the
+       scorer. A gap ends the hum when it is LONG; what note the voice returns on is the
+       measurement, not the boundary.                                                    */
+    const resumes = on.length>=5 && (on.length/Math.max(1,nxt.length)) >= ISO_ON_FRAC;
+    if(b-a<=maxGap && resumes){ end=b; continue; }
     break;
   }
   const tail = idx.filter(i=>i>=end);
