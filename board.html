@@ -98,6 +98,9 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
     <div class="hint" style="margin-top:10px;text-align:center">It stops on its own.</div>
 
     <div class="card" id="res" style="display:none">
+      <button id="sendrec" style="width:100%;margin-bottom:10px;padding:12px;border:0;
+        border-radius:10px;background:#2a3550;color:#cfe0ff;font:inherit;font-size:15px">
+        📤 Send Harry this recording</button>
       <div class="score" id="sc">—</div>
       <div class="band" id="bd"></div>
       <div class="say" id="sy"></div>
@@ -472,6 +475,7 @@ function retrack(pcm, sr, hopMs, winN){
    meter does not do: a wind measurement and an impact detector.                  */
 const H = window.HUM, H_ = window.HUM;
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let lastPCM=null, lastSR=44100;
 let ac, stream, an, anF, hp1, hp2, lp1, timer, running=false, hiBand=[], loBand=[], t0=0, heard=false, pcmLog=[], refNote=0, tunedTo=0, lvlLog=[], loudRef=0;
 
 function fit(){ const r=cv.getBoundingClientRect(), d=devicePixelRatio||1;
@@ -731,6 +735,13 @@ function stop(){
   /* THE SECOND LOOK — see the note above retrack(). Live detection answers in 40 ms on
      unfiltered audio; this re-reads the finished recording with the note-centred filter.
      On his 70 mph car recording it turned 2 usable frames into 35. */
+  /* ── KEEP WHAT THE APP ACTUALLY HEARD ─────────────────────────────────────────
+     iOS does NOT hand a web page the microphone that Voice Memos gets. Every fix in this
+     project was tuned against Voice Memo recordings, and the deployed code scores those
+     95.3 and 97.5 - while the same hum, same distance, through this page, reads 65. The
+     tuning corpus was never the input. So the page now keeps its own recording and can
+     hand it over, which is the only way to test what actually happens here. */
+  lastPCM = Float32Array.from(pcmLog); lastSR = ac.sampleRate;
   const liveHz = H.getFrames().map(f=>f.hz);  // the track he watched. Never lose it.
   if(pcmLog.length > 4096){
     try{
@@ -828,6 +839,7 @@ function stop(){
   showResult(s);
 }
 document.getElementById('go').onclick = start;
+{ const b=document.getElementById('sendrec'); if(b) b.onclick = saveRecording; }
 
 function showWind(q){
   const why = q.fails.includes('rumble') ? 'Too much wind on the mic.'
@@ -926,6 +938,29 @@ function draw(){
 
 /* ── RESULT ─────────────────────────────────────────────────────────────────── */
 let pendingHum = null;
+/* Write the captured audio out as a WAV and hand it to the iOS share sheet, so the exact
+   thing the page heard can be sent on and analysed. */
+function saveRecording(){
+  if(!lastPCM || !lastPCM.length){ alert('Hum once first.'); return; }
+  const n=lastPCM.length, sr=lastSR;
+  const buf=new ArrayBuffer(44+n*2), v=new DataView(buf);
+  const w=(o,str)=>{ for(let i=0;i<str.length;i++) v.setUint8(o+i, str.charCodeAt(i)); };
+  w(0,'RIFF'); v.setUint32(4,36+n*2,true); w(8,'WAVEfmt '); v.setUint32(16,16,true);
+  v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true);
+  v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,'data'); v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){ const x=Math.max(-1,Math.min(1,lastPCM[i]));
+    v.setInt16(44+i*2, x<0 ? x*0x8000 : x*0x7FFF, true); }
+  const blob=new Blob([buf],{type:'audio/wav'});
+  const file=new File([blob],'hum-as-the-app-heard-it.wav',{type:'audio/wav'});
+  if(navigator.canShare && navigator.canShare({files:[file]}))
+    navigator.share({files:[file], title:'Hum recording'}).catch(()=>{});
+  else {
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='hum-as-the-app-heard-it.wav';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+}
 function showResult(s){
   const b = s.total>=H.CAL.bands.ELITE ? ['ELITE','var(--go)']
           : s.total>=H.CAL.bands.CLEAN ? ['CLEAN','var(--ok)']
