@@ -1,5 +1,7 @@
 <meta charset="utf-8">
 <title>Hum Meter</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎵</text></svg>">
+
 <style>
   :root{
     --bg:#0b0f14; --panel:#121924; --line:#1e2a3a;
@@ -79,7 +81,12 @@
        sofa, the number is real but the point is lost. Two sentences fix that, and they
        have to come BEFORE the button, not after. -->
   <ol class="how">
-    <li><b>Put your phone on the ground</b> next to your ball, screen up.</li>
+<!-- ⚠️ DO NOT PUT THE PHONE BACK ON THE GROUND. Flat on the turf is what produces the
+     octave failure: the ground returns the voice about three feet late, which is near half
+     the pitch period, and autocorrelation then answers an octave low. 11 of the first 56
+     hums in the database were graded on that phantom note and NOT ONE cleared 65.3. The
+     page was teaching people into the bug. Leaning it up removes the reflection. -->
+    <li><b>Lean your phone up</b> against your bag or a club, screen facing you — not flat on the ground.</li>
     <li><b>Tap start, then hum one note</b> — all the way through your backswing,
         the ball, and your finish. Don’t stop when you hit it.</li>
     <li><b>Pick it up and look.</b> It stops on its own when you go quiet.</li>

@@ -1,6 +1,8 @@
 <!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Hum Board</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎵</text></svg>">
+
 <style>
 :root{
   --bg:#0b0f14; --card:#141a23; --line:#1e2733; --ink:#eef3f9; --dim:#8ea3bd;
@@ -76,7 +78,12 @@ code{background:#0f1620;padding:2px 6px;border-radius:5px;font-size:12px}
     <div class="card" id="firstrun" style="display:none;border-color:#1e4436;background:#101c18">
       <b style="font-size:15px">Hum through your swing. See where it breaks.</b>
       <ol class="how">
-        <li>Set your phone on the ground next to your ball, <b>screen up</b>.</li>
+<!-- ⚠️ DO NOT PUT THE PHONE BACK ON THE GROUND. Flat on the turf is what produces the
+     octave failure: the ground returns the voice about three feet late, which is near half
+     the pitch period, and autocorrelation then answers an octave low. 11 of the first 56
+     hums in the database were graded on that phantom note and NOT ONE cleared 65.3. The
+     page was teaching people into the bug. Leaning it up removes the reflection. -->
+        <li>Lean your phone up against your bag or a club, <b>screen facing you</b> — not flat on the ground.</li>
         <li><b>Tap start and make a swing.</b> Hold one steady hum the whole shot —
             backswing, strike and finish. Don’t stop when you hit it.</li>
         <li><b>Pick your phone up</b> and see your score. It stops on its own.</li>
