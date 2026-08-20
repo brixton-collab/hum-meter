@@ -46,7 +46,34 @@ function pipeline(pcm, sr){
   if(!q.ok) return {refused:q.fails.join('+')};
   const v=F.filter(f=>f.hz).map(f=>f.hz);
   if(v.length) H.resolveOctaves(H.confirmNoteOctave(H.robustNote(v)));
-  const ref=H.anchorNote(F.filter(f=>f.hz).map(f=>f.hz));
+  let ref=H.anchorNote(F.filter(f=>f.hz).map(f=>f.hz));
+  /* HARMONIC OCTAVE CHECK — a second opinion from a method that cannot make the same
+     mistake. Autocorrelation prefers the lag at twice the period, so at distance it
+     answers an octave low: his own A/B has the near hum plotted at F#3 (185 Hz) and the
+     SAME hum a few feet further at G2 (98 Hz). A harmonic sum cannot drift that way,
+     because a subharmonic predicts harmonics that are not in the spectrum. So when the
+     two disagree by an octave, believe the harmonics. */
+  /* ⚠️ MEASURED AND IT NEVER FIRES on any audio available - the autocorrelation note and
+     the harmonic note AGREE on every file here, including his real six-foot Voice Memo.
+     So his octave-at-distance failure is NOT reproducible from anything on disk: the only
+     evidence of it is his SCREEN (near hum plotted at F#3 185 Hz, same hum further away at
+     G2 98 Hz), and the screen recording's audio dies after 7 seconds and is too poor to
+     analyse. To fix that failure I need a VOICE MEMO of the FAR hum. Kept behind a flag. */
+  if(process.env.HARMOCT){
+    const {harmonicNote}=require('./harmonic.js');
+    const LONG=8192, hs=[];
+    for(let i=0;i+LONG<=pcm.length;i+=Math.round(sr*0.16)){
+      const r=harmonicNote(pcm.subarray(i,i+LONG),sr,LONG); if(r) hs.push(r.hz);
+    }
+    if(hs.length>=3 && ref){
+      const seed=hs.slice().sort((a,b)=>a-b)[hs.length>>1];
+      const fold=h=>{while(h>seed*1.5)h/=2; while(h<seed*0.67)h*=2; return h;};
+      const f=hs.map(fold).sort((a,b)=>a-b);
+      const hnote=f[f.length>>1];
+      const cents=1200*Math.log2(hnote/ref);
+      if(Math.abs(Math.abs(cents)-1200) < 150) ref = hnote;   // exactly an octave apart
+    }
+  }
   if(ref){ F.forEach(f=>{if(f.hz)f.hz=H.foldOctave(f.hz,ref);});
            F.forEach(f=>{if(f.hz&&!H.onNote(f.hz,ref))f.hz=0;}); }
   F.forEach(f=>f.drawHz=f.hz);
