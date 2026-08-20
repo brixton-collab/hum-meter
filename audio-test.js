@@ -74,11 +74,36 @@ function pipeline(pcm, sr){
       if(Math.abs(Math.abs(cents)-1200) < 150) ref = hnote;   // exactly an octave apart
     }
   }
+  const noiseFrame = new Array(F.length).fill(false);
   if(ref){ F.forEach(f=>{if(f.hz)f.hz=H.foldOctave(f.hz,ref);});
-           F.forEach(f=>{if(f.hz&&!H.onNote(f.hz,ref))f.hz=0;}); }
+           F.forEach((f,i)=>{ if(f.hz && !H.onNote(f.hz,ref)){ f.hz=0; noiseFrame[i]=true; } }); }
+  /* ── "WE HEARD SOMETHING AND IT WASN'T HIM" IS NOT THE SAME AS "HE STOPPED" ────
+     Two different things end up as an unvoiced frame, and lumping them together is what
+     has been costing him at six feet.
+
+       · a pitch WAS found and it was nowhere near his note  -> that is the ROOM. A car,
+         wind, a bird. It is evidence about the world, not about his hum, and charging
+         him for it is charging him for our microphone.
+       · no pitch at all                                     -> he may well have stopped.
+         That stays exactly as it is - counted, and a crack if it runs long enough.
+
+     This is the distinction every earlier attempt missed. Excluding gaps by LEVEL forgave
+     a hum stopping at the ball, because a strike is loud. Excluding them by LENGTH forgave
+     it too, because his real breaks are short. But a hum stopping at the ball produces NO
+     PITCH - not an off-note one - so this rule leaves it fully charged, which is the whole
+     requirement. SWING121 is the test that killed the others; it should be untouched. */
+  if(process.env.NOISEGAP) global.__noiseFrames = noiseFrame;
   F.forEach(f=>f.drawHz=f.hz);
   H.deHash();
-  return H.score(null, L);
+  const sc = H.score(null, L);
+  if(process.env.NOISEGAP && sc && global.__noiseFrames){
+    /* re-derive total with the room's frames out of the denominator */
+    const nf = global.__noiseFrames;
+    const kept = F.length - nf.filter(Boolean).length;
+    if(kept > 0){ const scale = F.length / kept;
+      sc.total = Math.round(Math.min(100, sc.total*scale)*10)/10; }
+  }
+  return sc;
 }
 /* HIS VERDICTS. These are the specification. Nothing else in this project is. */
 const CASES=[
