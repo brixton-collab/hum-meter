@@ -731,9 +731,49 @@ function throughImpact(fr, impactFrame, windowMs){
   return { after:aOn, before:bOn, survived:aOn>=0.5, restrictedAt:(aOn<0.5 && bOn>=0.5) };
 }
 
+
+/* ── THE REGISTER GUARD ───────────────────────────────────────────────────────
+   Autocorrelation's function peaks at EVERY multiple of the pitch period, so half the
+   true frequency is always a legal answer and only a margin rejects it. A reflection
+   arriving near HALF the pitch period eats that margin - and a phone lying on the ground
+   with a golfer standing six feet back is exactly that reflection, about three feet of
+   extra path. Reproduced from his own recordings in octave-sim.js: D3 149.1 -> D#2 76.9,
+   E3 166.3 -> G2 100.6. The database holds a real G2 96.7 from that same setup.
+
+   COST OF GETTING IT WRONG: 11 of his 56 hums were graded on the phantom note and NOT ONE
+   cleared 65.3. A confident wrong low score is the single worst thing this toy can do to
+   a stranger, so a note we cannot trust must not be scored at all.
+
+   TWO CHECKS, because a first-time visitor has no history:
+     ① THE FLOOR - measured, not guessed. Across all 84 recordings in the project (his
+       hums, strangers, IG golfers, range audio) the lowest TRUE note is 103.3 Hz. Below
+       95 Hz nothing real has ever appeared, and 10 of the 11 known failures sit there.
+     ② THE PLAYER'S OWN REGISTER - nobody drops a tritone below their own median between
+       one hum and the next. Swept over all 56 database rows: 12 hums of history at 450
+       cents catches 11/11 with ZERO false flags (at 5 hums it false-flags 3, at 8 one).
+
+   This is a SAFETY NET. It stops the wrong score; it does not recover the right note.  */
+const REGISTER_FLOOR_HZ = 95;
+const REGISTER_HISTORY   = 12;
+const REGISTER_BELOW_C   = 450;
+function registerGuard(noteHz, history){
+  if(!noteHz) return { trusted:true, why:null };
+  if(noteHz < REGISTER_FLOOR_HZ)
+    return { trusted:false, why:'below-floor', noteHz };
+  const h = (history||[]).filter(v => v > 0);
+  if(h.length >= REGISTER_HISTORY){
+    const med = median(h);
+    const below = -1200*Math.log2(noteHz/med);
+    if(below > REGISTER_BELOW_C)
+      return { trusted:false, why:'below-register', noteHz, median:med, below };
+  }
+  return { trusted:true, why:null };
+}
+
 window.HUM = { setFrames, getFrames, HOP, SR_MIN, SR_MAX, VIEW_CENTS, NOTE_NAMES,
                TOL_CENTS, CRACK_CAP, CAL, CLARITY_GATE, CLARITY_FILTERED,
                median, sd, detect, noteOf, robustNote, foldOctave, foldRun, anchorNote, lockNote, onNote, TUNE_FLOOR_HZ, confirmNoteOctave,
                resolveOctaves, deHash, isolate, score, beats,
-               signalQuality, gustSuspect, findImpact, throughImpact, WIND };
+               signalQuality, gustSuspect, findImpact, throughImpact, WIND,
+               registerGuard, REGISTER_FLOOR_HZ, REGISTER_HISTORY, REGISTER_BELOW_C };
 

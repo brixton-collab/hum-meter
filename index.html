@@ -1846,6 +1846,26 @@ function stop(){
   frames.forEach(f => { f.drawHz = f.hz; });      // corrected, but NOT de-hashed
   deHash();
 
+  /* ── THE OCTAVE FLOOR ───────────────────────────────────────────────────────
+     This is NOT the wind gate coming back. Brixton was right that a bit of noise must
+     never stop a score - imperfect conditions still produce a readable hum. This is the
+     other case: the note itself came out an octave below the one that was sung, so the
+     number would not be harsh, it would be WRONG. 11 of the first 56 hums in the
+     database were graded on that phantom note and not one cleared 65.3.
+
+     Below 95 Hz nothing real has ever appeared in 84 recordings - his hums, strangers,
+     IG golfers, range audio - where the lowest TRUE note is 103.3 Hz. This page keeps no
+     identity, so it gets the floor only; the board also checks the player's own register.
+     Cause: a reflection near half the pitch period, i.e. the phone flat on the ground. */
+  { const refN = anchorNote(frames.filter(f=>f.hz).map(f=>f.hz));
+    if(refN && refN < 95){
+      document.getElementById('hint').innerHTML =
+        '<b style="color:var(--warn)">Couldn\u2019t read your note \u2014 hum that one again.</b> ' +
+        'That came through an octave below where you were actually humming, so any score would be wrong. ' +
+        'Stand the phone up against something instead of flat on the ground, or come a step closer.';
+      return;
+    } }
+
   const s = score(rumbleTrack, lvlLog);
   window.__lastScore = s;          // draw() marks the cracks from this
   draw();

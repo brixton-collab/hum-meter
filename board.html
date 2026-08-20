@@ -803,6 +803,17 @@ function stop(){
 
   const voiced = fr.filter(f=>f.hz).map(f=>f.hz);
   if(voiced.length) H.resolveOctaves(H.confirmNoteOctave(H.robustNote(voiced)));
+
+  /* ── THE OCTAVE REFUSAL ─────────────────────────────────────────────────────
+     A note an octave below the one he sang is not a bad score, it is a WRONG one, and
+     it always reads low: 11 of the first 56 hums in the database were graded on the
+     phantom note and not one cleared 65.3. Refuse rather than guess - same doctrine as
+     the wind gate. See registerGuard() in hum-core.js for the mechanism and the data. */
+  { const ref0 = H.anchorNote(fr.filter(f=>f.hz).map(f=>f.hz));
+    const hist = Store.mine().map(r=>r.note_hz).filter(v=>v>0);
+    const g = H.registerGuard(ref0, hist);
+    if(!g.trusted){ showOctave(g); draw(); return; }
+  }
   /* THE OCTAVE LOCK, on the finished track. resolveOctaves re-asks the AUDIO before it
      moves anything, which is why it stays - but this page keeps no per-frame audio, so
      it can only fix runs shorter than two frames and every longer plunge survives into
@@ -841,7 +852,7 @@ function stop(){
 document.getElementById('go').onclick = start;
 { const b=document.getElementById('sendrec'); if(b) b.onclick = saveRecording; }
 
-function showWind(q){
+function showWind(q){ clearOctaveNoop();
   const why = q.fails.includes('rumble') ? 'Too much wind on the mic.'
             : q.fails.includes('voiced') ? 'I lost the note too often to score that.'
             : 'Too much background noise to score that fairly.';
@@ -852,6 +863,22 @@ function showWind(q){
   document.getElementById('res').style.display='none';
 }
 function clearWind(){ document.getElementById('blocker').innerHTML=''; }
+
+/* The octave refusal reads as advice, not as a fault, because the fix is real: the phone
+   on the ground bouncing your voice back at itself is what breaks the note reading, and
+   picking it up genuinely solves it. */
+function clearOctaveNoop(){}
+function showOctave(g){
+  const why = g.why==='below-floor'
+    ? 'That came through an octave below where you were actually humming'
+    : 'That read well below your usual note';
+  document.getElementById('blocker').innerHTML =
+    '<div class="warnbox"><b>\u26a0\ufe0f Couldn\u2019t read your note \u2014 hum that one again</b>' +
+    why + ', so any score would be wrong. ' +
+    'Stand the phone up against something instead of flat on the ground, or come a step closer, and go again.' +
+    ' <span class="hint">(I\u2019d rather give you nothing than give you a wrong number.)</span></div>';
+  document.getElementById('res').style.display='none';
+}
 
 /* ── THE TRACE ────────────────────────────────────────────────────────────────
    Same rules the live meter settled on: octave-corrected so a perfect hum draws a

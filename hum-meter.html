@@ -883,7 +883,15 @@ const TOL_CENTS = 25, TREND_MS = 200, HOLD_MIN_MS = 50, GASP_CENTS = 100, GASP_G
 // cracking. Measured against his ten graded clips this crack definition returns 0 for
 // every hum he called good and non-zero for every hum he called broken, so the cap only
 // actually bites on one of them - the rule and the metric already agreed.
-const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 100,
+/* ⚠️ 160 ms, RAISED FROM 100 — A BLIP IS NOT A CRACK.
+   His own six-foot recording, which he graded "90+, super steady, NO BREAKS", measures 98%
+   steady and 98% on-air and was scoring 72.9. One 120 ms pitch jump, 500 ms from the end,
+   was capping it: any crack at all puts a hum under 75 by his rule, so a single blip in
+   ten seconds of near-perfect hum cost 25 points. A voice that actually cracks stays
+   cracked longer than three frames. At 160 ms his clip reads 95.3 and NOTHING ELSE in the
+   corpus moves - not one other clip changes by a tenth - so this is not tuning, it is a
+   threshold that was simply too tight to distinguish a wobble from a break. */
+const CRACK_CAP = 74.9, CRACK_JUMP_C = 100, CRACK_JUMP_MS = 160,
       CRACK_DROP_MS = 100, CRACK_TAIL_MS = 150;
 
 // ── ISOLATE THE HUM ──────────────────────────────────────────────────────────
@@ -914,26 +922,27 @@ function isolate(fr){
     if(b-a<=1){ end=b; continue; }
     const nxt = fr.slice(b, b+look);
     const on  = nxt.filter(f=>f.hz);
-    /* ⚠️ ISOLATE ENDS THE HUM AT THE FIRST SUSTAINED OFF-NOTE PATCH, AND THAT IS A REAL
-       BUG - the off-note patch is the event the meter exists to measure. Measured on
-       SWING121: the voiced track runs essentially unbroken across all 6.2s and isolate
-       keeps 0.0-2.7s of it, so the scorer sees the clean opening and never the part that
-       comes apart. The truncated version scores 82; he graded the clip "60s ish".
+    /* ⚠️ THE HUM ENDS AT SILENCE, NOT AT AN OFF-NOTE PATCH.
 
-       THE FIX IS WRITTEN AND MEASURED AND IS *NOT* APPLIED, because it trades one wrong
-       answer for another and I could not tell which is right without asking him:
-           SWING121  82.1 -> 72.9   (into his band - correct)
-           SWING63   61.6 -> 43.4   (out of his band - wrong)
-       Dropping the on-note test admits the whole of SWING63, whose full nine seconds
-       score ~45 raw. Either the scorer is far too harsh on a swing hum's messy half, or
-       HIS GRADES FOR THE SWING CLIPS DESCRIBE THE TRUNCATED GRAPH THE APP SHOWED HIM AT
-       THE TIME - in which case the bands are wrong, not the fix. That question has to be
-       asked before this ships. Restore by replacing the two lines below with:
-           const resumes = on.length>=5 && (on.length/Math.max(1,nxt.length)) >= ISO_ON_FRAC;
-           if(b-a<=maxGap && resumes){ end=b; continue; }                                */
-    const resumesOnNote = on.length>=5 && median(on.slice(0,60).map(f=>off(f.hz))) <= ISO_NEAR_C;
-    const stays = nxt.length && (nxt.filter(f=>f.hz && off(f.hz)<=200).length/nxt.length) >= ISO_ON_FRAC;
-    if(b-a<=maxGap && resumesOnNote && stays){ end=b; continue; }
+       This used to require the audio after a gap to resume ON HIS NOTE and gave up if it
+       did not - so it ended the hum at the first sustained off-note excursion, which is
+       the event this meter exists to measure. Measured on SWING121: the voiced track runs
+       essentially unbroken across all 6.2 s and isolate kept 0.0-2.7s. The scorer was
+       handed the clean opening and never saw the part that comes apart.
+
+       HOW IT WAS CONFIRMED, because the scores alone were ambiguous. Fixing it moved
+       SWING121 82 -> 73 (right) and SWING63 62 -> 43 (apparently wrong against his
+       recorded grade of "~63"). So he was sent the raw audio and asked to listen to the
+       whole clip, and he re-graded it: "swing63 I'd grade in the 50s BECAUSE I LOST IT AT
+       IMPACT."
+
+       His original 63 had been given while looking at the graph the app drew - a graph
+       that had already thrown away the half where he lost it. The truncation was hiding
+       the very thing he grades on, and it was hiding it from him as well as from the
+       scorer. A gap ends the hum when it is LONG; what note the voice returns on is the
+       measurement, not the boundary.                                                    */
+    const resumes = on.length>=5 && (on.length/Math.max(1,nxt.length)) >= ISO_ON_FRAC;
+    if(b-a<=maxGap && resumes){ end=b; continue; }
     break;
   }
   const tail = idx.filter(i=>i>=end);
@@ -961,6 +970,25 @@ function score(rumble, level){
 
      So an onset is a RUN, not a frame: 200 ms of continuous pitch is a voice starting.
      A single frame is noise, and noise is what the lead-in is made of. */
+  /* ⚠️ THE SPAN IS THE BODY OF THE HUM, NOT EVERYTHING FROM THE FIRST BLIP TO THE LAST.
+
+     He graded two of his own six-foot recordings by ear - "90+, super steady, NO BREAKS"
+     and "elite, over 90" - and the scorer found three and five cracks in them. Where they
+     sat is the whole story:
+
+         REAL-6FT (no breaks)   0.4s, 0.8s ................... 11.9s     clip is 14.9s
+         FAR-6FT  (no breaks)   0.6s, 0.9s, 1.2s, 1.6s ....... 9.6s      clip is  9.9s
+         REF3     (all breaks)  ..... 3.3 4.3 4.6 7.9 11.3 12.9s
+         SWING63  (lost at ball) .... 4.4 4.5 4.6s
+
+     Every false crack is at the very start or the very end; every real one is in the body.
+     That is him pressing record and walking into position, and walking back afterwards -
+     and in the app it is the tap, the walk to the ball and the set-up. It is not his hum,
+     and it was being scored as the worst part of it.
+
+     So the span now starts where the hum is genuinely UP - sustained pitch at a level
+     comparable to the body of the hum - and ends where it drops away for good. A quiet
+     approach cannot open the span, and a fade-out cannot close it late. */
   const ONSET = Math.max(2, Math.round(200/HOP));
   const runStart = (arr, dir) => {
     const idx = dir>0 ? arr.map((_,i)=>i) : arr.map((_,i)=>arr.length-1-i);
@@ -971,7 +999,23 @@ function score(rumble, level){
     }
     return -1;
   };
-  let first = runStart(hum, 1), last = runStart(hum, -1);
+  const bodyLvl = (()=>{
+    if(!level || !level.length) return null;
+    const v=[]; for(let i=0;i<hum.length;i++){ const q=level[i0+i]; if(q!=null && hum[i].hz) v.push(q); }
+    return v.length>=10 ? median(v)*0.45 : null;
+  })();
+  const upAt = (dir) => {
+    const idx = dir>0 ? hum.map((_,i)=>i) : hum.map((_,i)=>hum.length-1-i);
+    let run=0;
+    for(const i of idx){
+      const loud = bodyLvl==null || (level[i0+i]!=null && level[i0+i] >= bodyLvl);
+      if(hum[i].hz && loud){ run++; if(run>=ONSET) return dir>0 ? i-run+1 : i+run-1; }
+      else run=0;
+    }
+    return -1;
+  };
+  let first = upAt(1), last = upAt(-1);
+  if(first<0 || last<0){ first = runStart(hum, 1); last = runStart(hum, -1); }
   // if nothing ever sustained, fall back to the old behaviour rather than refuse
   if(first < 0 || last < 0){
     first = hum.findIndex(f=>f.hz);
@@ -1082,13 +1126,22 @@ function score(rumble, level){
   // CRACKS: an audible break. The last 150 ms is exempt - on a swing hum that is impact,
   // and impact is the strike, not a crack.
   let noiseGaps = 0;
-  const guard = span.length - Math.round(CRACK_TAIL_MS/HOP);
+  /* ⚠️ 400 ms AT BOTH ENDS, NOT 150. Even after the span is trimmed to the body of the
+     hum, the first and last moments are the voice arriving and leaving - pitch is
+     unsettled there by definition, and at six feet it is unsettled for longer because
+     there is less of it to work with. Measured on the recording he graded "90+, super
+     steady, NO BREAKS": the only two cracks left sat at 0.2s and 11.3s of an 11.8s span,
+     both just inside a 150 ms guard. His real breaks are nowhere near the edges - REF3's
+     run 3.3s to 12.9s of 18s, SWING63's cluster at 4.4-4.6s - so widening the guard
+     cannot hide the events that matter. */
+  const EDGE_MS = 400;
+  const guard = span.length - Math.round(EDGE_MS/HOP);
   /* A HEAD GUARD, symmetric with the tail one. The tail was exempt because on a swing
      hum the last 150 ms is impact, and impact is the strike rather than a crack. The
      same argument applies at the front and was simply never made: the first 150 ms is
      the voice ARRIVING - pitch is unsettled there by definition, and the filter is still
      ringing up - so a "crack" in it is the recording starting, not the golfer cracking. */
-  const headGuard = Math.round(CRACK_TAIL_MS/HOP);
+  const headGuard = Math.round(EDGE_MS/HOP);
   const cracks=[];
   for(let i=0;i<span.length;){
     if(devSpan[i]!==null && devSpan[i]>CRACK_JUMP_C){
@@ -1173,6 +1226,46 @@ function score(rumble, level){
       });
       windCracks = cracks.length - kept.length;
       cracks.length = 0; kept.forEach(c=>cracks.push(c));
+    }
+  }
+
+  /* ── A BREAK IN LOUDNESS IS A BREAK ───────────────────────────────────────────
+     Everything above asks whether he HELD THE NOTE. Nothing asked whether the hum was
+     still THERE, and those are not the same question.
+
+     REF3 is the proof. He graded it "the hum is lost ... all the breaks, I'd put it 50s,
+     60 ish". The scorer said 85 with ZERO cracks, because his pitch never wandered - it
+     drops out three times mid-clip while staying exactly on note, and a dropout is only
+     seen when the PITCH disappears. Measured against its own peak, 17% of REF3 sits under
+     a quarter of its own loudness, against 5-6% for the two hums he graded in the 90s.
+
+     So a sustained collapse in level, relative to the body of his own hum, is a break -
+     and it is charged as one whether or not the pitch survived it. This is also the same
+     event as losing it at the ball, which is the thing the meter is FOR.               */
+  if(level && level.length){
+    const base = i0 + first;
+    const lv = []; for(let i=0;i<span.length;i++){ const v=level[base+i]; if(v!=null && voiced[i]) lv.push(v); }
+    if(lv.length >= 10){
+      const ref = median(lv), floor = ref*0.30, need = Math.round(150/HOP);
+      for(let i=0;i<span.length;){
+        const v = level[base+i];
+        if(v == null || v >= floor){ i++; continue; }
+        let j=i; while(j<span.length && level[base+j]!=null && level[base+j]<floor) j++;
+        /* ⚠️ A BREAK HAS HUM ON BOTH SIDES OF IT. Every hum tapers at the end, and the
+           first version of this charged that taper as a break - his PERFECT2, which he
+           graded ~100, dropped to 74 for the way it finished. A fade is only a break if
+           he PICKED IT BACK UP, which is exactly how he describes the event: "you can
+           hear me hum, then I hit the ball (lose the hum), then hum picks back". So
+           require the hum to come back loud enough, after the quiet patch, to prove it
+           was a break in the middle and not the ending. */
+        const after = level.slice(base+j, base+j+need*2).filter(v=>v!=null && v>=ref*0.6);
+        const cameBack = after.length >= Math.min(need, 3);
+        if(cameBack && (j-i) >= need && i>=headGuard && i<guard &&
+           !cracks.some(c=>{ const a2=Math.round(c.at*1000/HOP); return a2<j && a2+Math.round(c.ms/HOP)>i; }))
+          cracks.push({kind:'fade', at:(i*HOP)/1000, ms:Math.round((j-i)*HOP), cents:0});
+        i=j;
+      }
+      cracks.sort((a,b)=>a.at-b.at);
     }
   }
 
@@ -1752,6 +1845,26 @@ function stop(){
     } }
   frames.forEach(f => { f.drawHz = f.hz; });      // corrected, but NOT de-hashed
   deHash();
+
+  /* ── THE OCTAVE FLOOR ───────────────────────────────────────────────────────
+     This is NOT the wind gate coming back. Brixton was right that a bit of noise must
+     never stop a score - imperfect conditions still produce a readable hum. This is the
+     other case: the note itself came out an octave below the one that was sung, so the
+     number would not be harsh, it would be WRONG. 11 of the first 56 hums in the
+     database were graded on that phantom note and not one cleared 65.3.
+
+     Below 95 Hz nothing real has ever appeared in 84 recordings - his hums, strangers,
+     IG golfers, range audio - where the lowest TRUE note is 103.3 Hz. This page keeps no
+     identity, so it gets the floor only; the board also checks the player's own register.
+     Cause: a reflection near half the pitch period, i.e. the phone flat on the ground. */
+  { const refN = anchorNote(frames.filter(f=>f.hz).map(f=>f.hz));
+    if(refN && refN < 95){
+      document.getElementById('hint').innerHTML =
+        '<b style="color:var(--warn)">Couldn\u2019t read your note \u2014 hum that one again.</b> ' +
+        'That came through an octave below where you were actually humming, so any score would be wrong. ' +
+        'Stand the phone up against something instead of flat on the ground, or come a step closer.';
+      return;
+    } }
 
   const s = score(rumbleTrack, lvlLog);
   window.__lastScore = s;          // draw() marks the cracks from this
