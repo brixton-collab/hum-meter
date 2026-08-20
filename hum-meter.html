@@ -1860,7 +1860,14 @@ function stop(){
      IG golfers, range audio - where the lowest TRUE note is 103.3 Hz. This page keeps no
      identity, so it gets the floor only; the board also checks the player's own register.
      Cause: a reflection near half the pitch period, i.e. the phone flat on the ground. */
-  { const refN = anchorNote(frames.filter(f=>f.hz).map(f=>f.hz));
+  { /* ⚠️ ONLY WHEN THERE WAS ACTUALLY A HUM - room noise is low-frequency, so silence
+       reads as a low note and this accused him of an octave error before he had hummed
+       at all. A sustained voiced run is the evidence that there was a note to get wrong.
+       FAILS OPEN. */
+    let longest=0, run=0;
+    for(const f of frames){ if(f.hz){ run++; if(run>longest) longest=run; } else run=0; }
+    const heldLongEnough = longest*HOP >= 800;
+    const refN = heldLongEnough ? anchorNote(frames.filter(f=>f.hz).map(f=>f.hz)) : null;
     if(refN && refN < 95){
       document.getElementById('hint').innerHTML =
         '<b style="color:var(--warn)">Couldn\u2019t read your note \u2014 hum that one again.</b> ' +

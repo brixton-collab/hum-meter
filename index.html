@@ -815,10 +815,24 @@ function stop(){
      it always reads low: 11 of the first 56 hums in the database were graded on the
      phantom note and not one cleared 65.3. Refuse rather than guess - same doctrine as
      the wind gate. See registerGuard() in hum-core.js for the mechanism and the data. */
-  { const ref0 = H.anchorNote(fr.filter(f=>f.hz).map(f=>f.hz));
-    const hist = Store.mine().map(r=>r.note_hz).filter(v=>v>0);
-    const g = H.registerGuard(ref0, hist);
-    if(!g.trusted){ showOctave(g); draw(); return; }
+  /* ⚠️ IT MUST NOT FIRE WHEN THERE WAS NO HUM. Brixton, live-testing 2026-08-20: "before
+     i even hum im getting 'that came through an octave below where you were actually
+     humming'". Room noise is low-frequency, so silence reads as a low note and the guard
+     accused him of an octave error he never made - the single most confusing thing the
+     page can say, because he had not done anything yet.
+
+     An octave error is a claim ABOUT A HUM, so there has to be a hum first. A sustained
+     note is the evidence: signalQuality already measures the longest unbroken voiced run,
+     and noise never sustains one - that is the same reasoning that separates a flapping
+     mic from a real swing hum. Under 800 ms of held note, this says nothing at all and
+     the normal path handles it. FAILS OPEN: when in doubt, score it. */
+  { const heldLongEnough = q.longestMs >= 800;
+    if(heldLongEnough){
+      const ref0 = H.anchorNote(fr.filter(f=>f.hz).map(f=>f.hz));
+      const hist = Store.mine().map(r=>r.note_hz).filter(v=>v>0);
+      const g = H.registerGuard(ref0, hist);
+      if(!g.trusted){ showOctave(g); draw(); return; }
+    }
   }
   /* THE OCTAVE LOCK, on the finished track. resolveOctaves re-asks the AUDIO before it
      moves anything, which is why it stays - but this page keeps no per-frame audio, so
@@ -856,7 +870,13 @@ function stop(){
   showResult(s);
 }
 document.getElementById('go').onclick = start;
-{ const b=document.getElementById('sendrec'); if(b) b.onclick = saveRecording; }
+/* THE RECORDING BUTTON IS A DEBUG TOOL, NOT A FEATURE. It exists so the exact audio the
+   page heard can be sent on and analysed, which is how the octave bug was found - but a
+   stranger arriving from Instagram has no idea who Harry is and it makes the page look
+   unfinished. Hidden by default; add ?dev=1 to the URL to get it back. */
+{ const b=document.getElementById('sendrec');
+  const dev = /[?&]dev=1/.test(location.search);
+  if(b){ if(dev) b.onclick = saveRecording; else b.style.display='none'; } }
 
 function showWind(q){ clearOctaveNoop();
   const why = q.fails.includes('rumble') ? 'Too much wind on the mic.'

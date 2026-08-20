@@ -735,6 +735,22 @@ function findImpact(hi){
 function throughImpact(fr, impactFrame, windowMs){
   if(impactFrame == null) return null;
   const w = Math.max(2, Math.round((windowMs||400)/HOP));
+
+  /* ⚠️ THE END OF THE RECORDING IS NOT A STOP AT THE BALL.
+     Brixton, 2026-08-20: "If I got an elite hum why is it saying stopped at the ball?
+     That makes no sense." He was right and this is why. The verdict was the share of
+     VOICED frames in the 400 ms after the strike - but when the strike lands near the end
+     of the hum there are no 400 ms left, so the window ran off the end of the recording
+     and counted the empty tail as him going quiet. A hum with zero cracks and 100% on-air
+     was told it stopped at the ball, which is the one verdict in the whole app that
+     contradicts the score next to it.
+
+     Same doctrine the crack logic already settled on: a fade at the end is only a break
+     if he PICKED IT BACK UP. If there is not a full window of hum left to judge, the
+     honest answer is that we did not hear the strike well enough to say - not an
+     accusation. Reported as "no strike heard". */
+  if(impactFrame + w > fr.length) return null;
+
   const after  = fr.slice(impactFrame, impactFrame+w);
   const before = fr.slice(Math.max(0,impactFrame-w), impactFrame);
   const aOn = after.filter(f=>f.hz).length  / Math.max(after.length,1);
